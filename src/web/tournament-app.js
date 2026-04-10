@@ -49,6 +49,31 @@
       .join('');
   }
 
+  function renderLiveBoards() {
+    const tid = el('live-tournament').value;
+    const t = getTournamentById(tid);
+    if (!t) return;
+
+    const currentRound = t.currentRound || 1;
+    const summary = Logic.getRoundSummary(t.matches, currentRound);
+    const currentMatches = t.matches.filter((m) => m.phase === 'poule' && (m.round || 1) === currentRound);
+    const nextMatches = t.matches.filter((m) => m.phase === 'poule' && (m.round || 1) === currentRound + 1);
+
+    el('live-round-meta').innerHTML = `<p><strong>Current round:</strong> ${currentRound} / ${summary.maxRound} — Done: ${summary.done}/${summary.total}</p>`;
+    el('live-board-list').innerHTML = currentMatches.length
+      ? currentMatches
+          .map(
+            (m) =>
+              `<div class='board-item'><strong>${m.boardLabel || `Board ${m.board || '-'}`}</strong><br>${m.a} vs ${m.b}<br>Writer: ${m.writer}<br>Status: ${m.status || 'pending'}</div>`
+          )
+          .join('')
+      : "<p class='muted'>No matches in current round.</p>";
+
+    el('live-next-round').innerHTML = nextMatches.length
+      ? `<p><strong>Next round preview:</strong> ${nextMatches.length} match(es) ready.</p>`
+      : "<p>No next round scheduled yet.</p>";
+  }
+
   function renderDashboard() {
     el('season-list').innerHTML = state.tournaments
       .map((t) => `<li>${t.season}: ${t.name} (${t.date}) - ${t.users.length} users</li>`)
@@ -143,7 +168,7 @@
       `<h4>${title}</h4>` +
       (arr.length
         ? arr
-            .map((m, i) => `<p>M${i + 1}: ${m.a} vs ${m.b} | ${m.boardLabel || `Board ${m.board}`} | Writer: ${m.writer}</p>`)
+            .map((m, i) => `<div class='ko-group'><strong>M${i + 1}</strong>: ${m.a} vs ${m.b}<br>${m.boardLabel || `Board ${m.board}`} | Writer: ${m.writer}</div>`)
             .join('')
         : "<p class='muted'>No matches generated yet.</p>");
 
@@ -252,8 +277,10 @@
 
       renderDashboard();
       ['admin-tournament', 'score-tournament'].forEach(tournamentOptions);
+      tournamentOptions('live-tournament');
       renderPlayersAndAdmins();
       renderScoreMatches();
+      renderLiveBoards();
       saveState();
       e.target.reset();
     });
@@ -268,6 +295,8 @@
         renderStandings(selected);
       }
     });
+
+    el('live-tournament').addEventListener('change', renderLiveBoards);
 
     el('add-admin').addEventListener('click', () => {
       const tid = el('admin-tournament').value;
@@ -352,12 +381,12 @@
         return;
       }
 
-      t.poules = Array.from({ length: pouleCount }, (_, i) => ({
-        name: `Poule ${String.fromCharCode(65 + i)}`,
-        players: players.slice(i * pouleSize, (i + 1) * pouleSize),
-      }));
+      const seedingMethod = el('seeding-method').value;
+      t.poules = Logic.generateBalancedPoules(players, pouleCount, pouleSize, seedingMethod);
 
       t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
+      t.matches = t.matches.map((m) => ({ ...m, status: 'pending', round: 1 }));
+      t.currentRound = 1;
 
       el('poule-output').innerHTML = t.poules
         .map((p) => `<h4>${p.name}</h4><p>${p.players.join(', ')}</p>`)
@@ -366,7 +395,74 @@
       renderScoreMatches();
       renderPace();
       renderStandings(t);
+      renderLiveBoards();
       saveState();
+    });
+
+    el('create-rounds').addEventListener('click', () => {
+      const tid = el('admin-tournament').value;
+      if (!canManageTournament(tid)) {
+        alert('Only assigned tournament admins or super admins can create board rounds.');
+        return;
+      }
+
+      const t = getTournamentById(tid);
+      if (!t) return;
+      const pouleMatches = t.matches.filter((m) => m.phase === 'poule');
+      const scheduled = Logic.schedulePouleMatches(pouleMatches, t.boards, t.boardNames).map((m) => ({
+        ...m,
+        status: m.status || 'pending',
+      }));
+      const nonPoule = t.matches.filter((m) => m.phase !== 'poule');
+      t.matches = [...scheduled, ...nonPoule];
+      t.currentRound = 1;
+
+      renderScoreMatches();
+      renderLiveBoards();
+      saveState();
+    });
+
+    el('next-round').addEventListener('click', () => {
+      const tid = el('admin-tournament').value;
+      if (!canManageTournament(tid)) {
+        alert('Only assigned tournament admins or super admins can advance rounds.');
+        return;
+      }
+      const t = getTournamentById(tid);
+      if (!t) return;
+
+      const maxRound = Math.max(...t.matches.filter((m) => m.phase === 'poule').map((m) => m.round || 1), 1);
+      t.currentRound = Math.min((t.currentRound || 1) + 1, maxRound);
+      renderLiveBoards();
+      saveState();
+    });
+
+    el('print-schedule').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t) return;
+
+      const rows = t.matches
+        .filter((m) => m.phase === 'poule')
+        .sort((a, b) => (a.round || 1) - (b.round || 1) || (a.board || 1) - (b.board || 1))
+        .map(
+          (m) =>
+            `<tr><td>${m.round || '-'}</td><td>${m.boardLabel || `Board ${m.board || '-'}`}</td><td>${m.a}</td><td>${m.b}</td><td>${m.writer}</td><td>${m.status || 'pending'}</td></tr>`
+        )
+        .join('');
+
+      const w = window.open('', '_blank', 'width=900,height=700');
+      if (!w) return;
+      w.document.write(`
+        <html><head><title>${t.name} schedule</title>
+        <style>body{font-family:Arial;padding:16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:6px;text-align:left}</style>
+        </head><body>
+        <h1>${t.name} - Poule Schedule</h1>
+        <table><thead><tr><th>Round</th><th>Board</th><th>Player A</th><th>Player B</th><th>Writer</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+        </body></html>
+      `);
+      w.document.close();
+      w.focus();
+      w.print();
     });
 
     el('calculate-standings').addEventListener('click', () => {
@@ -486,16 +582,24 @@
 
       match.scoreA = scoreA;
       match.scoreB = scoreB;
+      if (phase === 'poule') match.status = 'done';
       match.updatedBy = by;
       match.updatedAt = new Date().toISOString();
 
       t.scoreHistory.unshift({ phase, a: match.a, b: match.b, scoreA, scoreB, by, at: match.updatedAt });
 
       updateKOWriters(t);
+      if (phase === 'poule') {
+        const summary = Logic.getRoundSummary(t.matches, t.currentRound || 1);
+        if (summary.isComplete && (t.currentRound || 1) < summary.maxRound) {
+          t.currentRound = (t.currentRound || 1) + 1;
+        }
+      }
       renderPace();
       renderKoOutput(t);
       renderScoreMatches();
       renderStandings(t);
+      renderLiveBoards();
 
       el('score-msg').textContent = `Saved ${match.a} ${scoreA}-${scoreB} ${match.b} by ${by} at ${new Date(match.updatedAt).toLocaleTimeString()}`;
       saveState();
@@ -514,6 +618,7 @@
     initTabs();
     renderDashboard();
     ['admin-tournament', 'score-tournament'].forEach(tournamentOptions);
+    tournamentOptions('live-tournament');
     renderPlayersAndAdmins();
     roleMessage();
     renderScoreMatches();
@@ -525,6 +630,7 @@
       renderKoOutput(selected);
       renderStandings(selected);
     }
+    renderLiveBoards();
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => null);

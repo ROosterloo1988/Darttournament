@@ -7,6 +7,9 @@ const {
   calculatePouleStandings,
   buildKOMatchesFromPlayers,
   generateKOfromStandings,
+  schedulePouleMatches,
+  generateBalancedPoules,
+  getRoundSummary,
 } = require('../src/tournament-logic');
 
 test('boardLabel uses custom board names in rotation', () => {
@@ -51,4 +54,42 @@ test('generateKOfromStandings splits winner and loser brackets', () => {
   const ko = generateKOfromStandings(standings, 4, ['1', '2', '3', '4']);
   assert.equal(ko.winner.length, 2); // A1-A2 and B1-B2
   assert.equal(ko.loser.length, 1); // A3-B3
+});
+
+test('schedulePouleMatches assigns rounds without player conflicts in same round', () => {
+  const matches = [
+    { a: 'A', b: 'B' },
+    { a: 'C', b: 'D' },
+    { a: 'A', b: 'C' },
+    { a: 'B', b: 'D' },
+  ];
+
+  const out = schedulePouleMatches(matches, 2, ['B1', 'B2']);
+  assert.equal(out[0].round, 1);
+  assert.equal(out[1].round, 1);
+
+  const round1 = out.filter((m) => m.round === 1);
+  const players = new Set(round1.flatMap((m) => [m.a, m.b]));
+  assert.equal(players.size, 4);
+});
+
+test('generateBalancedPoules snake mode spreads top seeds', () => {
+  const players = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
+  const poules = generateBalancedPoules(players, 2, 4, 'snake');
+  assert.equal(poules.length, 2);
+  assert.deepEqual(poules[0].players, ['P1', 'P4', 'P5', 'P8']);
+  assert.deepEqual(poules[1].players, ['P2', 'P3', 'P6', 'P7']);
+});
+
+test('getRoundSummary reports completion for current round', () => {
+  const matches = [
+    { phase: 'poule', round: 1, status: 'done' },
+    { phase: 'poule', round: 1, status: 'done' },
+    { phase: 'poule', round: 2, status: 'pending' },
+  ];
+  const summary = getRoundSummary(matches, 1);
+  assert.equal(summary.total, 2);
+  assert.equal(summary.done, 2);
+  assert.equal(summary.isComplete, true);
+  assert.equal(summary.maxRound, 2);
 });

@@ -1,5 +1,13 @@
 const CACHE = "darttournament-v1";
-const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest"];
+const ASSETS = [
+  "/",
+  "/index.html",
+  "/styles.css",
+  "/src/tournament-logic.js",
+  "/src/web/store.js",
+  "/src/web/tournament-app.js",
+  "/manifest.webmanifest",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
