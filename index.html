@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Darttournament PWA</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Darttournament</h1>
+      <p>ZomerCompetitie-style tournament control</p>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">Dashboard</button>
+      <button class="tab" data-tab="score-form">Score Form</button>
+      <button class="tab" data-tab="live-boards">Live Boards</button>
+      <button class="tab" data-tab="admin-portal">Admin Portal</button>
+    </nav>
+
+    <main>
+      <section id="dashboard" class="panel active">
+        <div class="card">
+          <h2>Active Tournament</h2>
+          <p id="active-tournament">No tournament selected yet.</p>
+        </div>
+
+        <div class="card">
+          <h2>Quick links</h2>
+          <div class="quick-links">
+            <button class="quick" data-tab-target="score-form">Open Score Form</button>
+            <button class="quick" data-tab-target="admin-portal">Open Admin Portal</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Seizoenen tournaments</h2>
+          <ul id="season-list"></ul>
+        </div>
+      </section>
+
+      <section id="score-form" class="panel">
+        <div class="card">
+          <h2>Score Form (open for everyone)</h2>
+          <form id="score-form-element">
+            <label>Tournament
+              <select id="score-tournament"></select>
+            </label>
+            <label>Phase
+              <select id="score-phase">
+                <option value="poule">Poule</option>
+                <option value="ko-winner">KO Winner</option>
+                <option value="ko-loser">KO Loser</option>
+              </select>
+            </label>
+            <label>Match
+              <select id="score-match"></select>
+            </label>
+            <div class="row">
+              <label>Player A score <input id="score-a" type="number" min="0" required /></label>
+              <label>Player B score <input id="score-b" type="number" min="0" required /></label>
+            </div>
+            <label>Your name
+              <input id="score-submitter" required placeholder="Who writes this score?" />
+            </label>
+            <button type="submit">Save score</button>
+          </form>
+          <p id="score-msg" class="msg"></p>
+          <div id="score-history"></div>
+        </div>
+      </section>
+
+      <section id="live-boards" class="panel">
+        <div class="card">
+          <h2>Live Boards (Tournament Day)</h2>
+          <label>Tournament
+            <select id="live-tournament"></select>
+          </label>
+          <div id="live-round-meta"></div>
+          <div id="live-board-list"></div>
+          <div id="live-next-round"></div>
+        </div>
+      </section>
+
+      <section id="admin-portal" class="panel">
+        <div class="card">
+          <h2>Portal Login Context</h2>
+          <div class="row">
+            <label>Current user <input id="current-user" value="alice" /></label>
+            <button id="refresh-role" type="button">Check role</button>
+          </div>
+          <p id="role-status" class="msg"></p>
+        </div>
+
+        <div class="card">
+          <h2>Super Admin: Create tournament</h2>
+          <form id="create-tournament-form">
+            <div class="row">
+              <label>Name <input id="t-name" required /></label>
+              <label>Season <input id="t-season" placeholder="2026 Summer" required /></label>
+            </div>
+            <div class="row">
+              <label>Date <input id="t-date" type="date" required /></label>
+              <label>Boards <input id="t-boards" type="number" min="1" max="16" value="4" required /></label>
+            </div>
+            <label>Board names (comma-separated, optional)
+              <input id="t-board-names" placeholder="Board 1, Board 2, Center Stage..." />
+            </label>
+            <button type="submit">Create tournament</button>
+          </form>
+          <p class="hint">Only 2 super admins allowed: <strong>alice</strong> and <strong>bob</strong>.</p>
+        </div>
+
+        <div class="card">
+          <h2>Tournament admin actions</h2>
+          <label>Tournament
+            <select id="admin-tournament"></select>
+          </label>
+          <div class="row">
+            <input id="new-admin" placeholder="Assign tournament admin user" />
+            <button id="add-admin" type="button">Assign admin</button>
+          </div>
+          <ul id="admin-list"></ul>
+          <div class="row">
+            <input id="new-player" placeholder="Add player to this tournament" />
+            <button id="add-player" type="button">Add player</button>
+            <button id="reset-users" type="button">Reset users for tournament</button>
+          </div>
+          <ul id="player-list"></ul>
+        </div>
+
+        <div class="card">
+          <h2>Poules + board/writer planning</h2>
+          <div class="row">
+            <label># Poules <input id="poule-count" type="number" min="1" value="2" /></label>
+            <label>Players per poule <input id="poule-size" type="number" min="2" value="4" /></label>
+            <label>Seeding
+              <select id="seeding-method">
+                <option value="snake">Snake (balanced)</option>
+                <option value="random">Random</option>
+              </select>
+            </label>
+          </div>
+          <button id="generate-poules" type="button">Generate poules</button>
+          <button id="calculate-standings" type="button">Calculate standings</button>
+          <button id="create-rounds" type="button">Create board rounds</button>
+          <button id="next-round" type="button">Advance to next round</button>
+          <button id="print-schedule" type="button">Print schedule</button>
+          <div id="poule-output"></div>
+          <div id="standings-output"></div>
+        </div>
+
+        <div class="card">
+          <h2>Knockout generator (winner + loser)</h2>
+          <button id="generate-ko" type="button">Generate KO from poules</button>
+          <button id="generate-ko-ranked" type="button">Generate KO from standings</button>
+          <div class="row">
+            <input id="ko-fill-player" placeholder="Player to manually add" />
+            <select id="ko-fill-target">
+              <option value="winner">Winner bracket</option>
+              <option value="loser">Loser bracket</option>
+            </select>
+            <button id="add-ko-player" type="button">Add to bracket</button>
+          </div>
+          <div id="ko-output"></div>
+        </div>
+
+        <div class="card">
+          <h2>Poule pace overview</h2>
+          <button id="simulate-progress" type="button">Simulate progress status</button>
+          <div id="pace-output"></div>
+        </div>
+
+        <div class="card">
+          <h2>Backup / Restore</h2>
+          <div class="row">
+            <button id="export-data" type="button">Export JSON backup</button>
+            <label>Import JSON backup
+              <input id="import-data" type="file" accept="application/json" />
+            </label>
+          </div>
+          <p class="hint">Use this to move tournament data between devices.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="src/tournament-logic.js"></script>
+    <script src="src/web/store.js"></script>
+    <script src="src/web/tournament-app.js" defer></script>
+  </body>
+</html>
