@@ -32,11 +32,6 @@ ul { margin: 0; padding-left: 1.2rem; }
 .msg { color: var(--accent); min-height: 1.2rem; }
 .hint { color: var(--muted); font-size: .9rem; }
 .quick-links { display: flex; gap: .6rem; flex-wrap: wrap; }
-.card button { width: fit-content; }
 .pace.bad { color: var(--danger); }
 .pace.warn { color: var(--warn); }
 .pace.ok { color: var(--ok); }
-.muted { color: var(--muted); }
-#score-history p { margin: .35rem 0; font-size: .9rem; color: var(--muted); }
-#standings-output table { width: 100%; border-collapse: collapse; }
-#standings-output th, #standings-output td { border-bottom: 1px solid #334155; padding: .35rem; text-align: left; }
