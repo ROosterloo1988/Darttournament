@@ -35,5 +35,3 @@ ul { margin: 0; padding-left: 1.2rem; }
 .pace.bad { color: var(--danger); }
 .pace.warn { color: var(--warn); }
 .pace.ok { color: var(--ok); }
-.muted { color: var(--muted); }
-#score-history p { margin: .35rem 0; font-size: .9rem; color: var(--muted); }
