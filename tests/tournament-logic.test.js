@@ -7,7 +7,6 @@ const {
   calculatePouleStandings,
   buildKOMatchesFromPlayers,
   generateKOfromStandings,
-  schedulePouleMatches,
 } = require('../src/tournament-logic');
 
 test('boardLabel uses custom board names in rotation', () => {
@@ -52,21 +51,4 @@ test('generateKOfromStandings splits winner and loser brackets', () => {
   const ko = generateKOfromStandings(standings, 4, ['1', '2', '3', '4']);
   assert.equal(ko.winner.length, 2); // A1-A2 and B1-B2
   assert.equal(ko.loser.length, 1); // A3-B3
-});
-
-test('schedulePouleMatches assigns rounds without player conflicts in same round', () => {
-  const matches = [
-    { a: 'A', b: 'B' },
-    { a: 'C', b: 'D' },
-    { a: 'A', b: 'C' },
-    { a: 'B', b: 'D' },
-  ];
-
-  const out = schedulePouleMatches(matches, 2, ['B1', 'B2']);
-  assert.equal(out[0].round, 1);
-  assert.equal(out[1].round, 1);
-
-  const round1 = out.filter((m) => m.round === 1);
-  const players = new Set(round1.flatMap((m) => [m.a, m.b]));
-  assert.equal(players.size, 4);
 });

@@ -35,7 +35,6 @@
       matches: t.matches || [],
       ko: t.ko || { winner: [], loser: [] },
       scoreHistory: t.scoreHistory || [],
-      currentRound: t.currentRound || 1,
     };
   }
 
