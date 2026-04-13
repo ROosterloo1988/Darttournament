@@ -36,6 +36,12 @@ Run tests:
 npm test
 ```
 
+Real-event guide:
+
+```bash
+cat docs/RUNBOOK_THURSDAY.md
+```
+
 ## Install on a clean Ubuntu server
 
 There is now an installer script for a bare Ubuntu VPS:
