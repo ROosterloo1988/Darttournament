@@ -11,6 +11,8 @@ const {
   generateBalancedPoules,
   getRoundSummary,
   normalizePlayers,
+  generatePouleOptions,
+  getPouleCompletion,
 } = require('../src/tournament-logic');
 
 test('boardLabel uses custom board names in rotation', () => {
@@ -99,4 +101,20 @@ test('normalizePlayers trims and deduplicates case-insensitively', () => {
   const raw = ' Ana\nBram\nana, Cem ; bram ';
   const players = normalizePlayers(raw);
   assert.deepEqual(players, ['Ana', 'Bram', 'Cem']);
+});
+
+test('generatePouleOptions includes full-usage option when possible', () => {
+  const options = generatePouleOptions(16, 4, 4, 4);
+  assert.ok(options.some((o) => o.pouleCount === 4 && o.pouleSize === 4 && o.usesAllPlayers));
+});
+
+test('getPouleCompletion reports completion totals', () => {
+  const status = getPouleCompletion([
+    { phase: 'poule', scoreA: 3, scoreB: 0 },
+    { phase: 'poule', scoreA: null, scoreB: null },
+    { phase: 'ko', scoreA: 2, scoreB: 1 },
+  ]);
+  assert.equal(status.total, 2);
+  assert.equal(status.done, 1);
+  assert.equal(status.isComplete, false);
 });

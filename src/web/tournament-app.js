@@ -2,6 +2,7 @@
   const Logic = global.TournamentLogic;
   const Store = global.DartStore;
   const state = Store.load();
+  const TOURNAMENT_STATUSES = ['draft', 'poules_running', 'poules_closed', 'ko_running', 'finished'];
 
   const el = (id) => document.getElementById(id);
 
@@ -13,12 +14,20 @@
     return state.tournaments.find((t) => t.id === id);
   }
 
-  function isSuperAdmin() {
+  function hasAdminSession() {
+    return state.adminSession?.loggedIn && state.adminSession.user === state.currentUser;
+  }
+
+  function hasSuperAdminRole() {
     return state.superAdmins.includes(state.currentUser);
   }
 
+  function isSuperAdmin() {
+    return hasAdminSession() && hasSuperAdminRole();
+  }
+
   function isTournamentAdmin(tournamentId) {
-    return (state.tournamentAdmins[tournamentId] || []).includes(state.currentUser);
+    return hasAdminSession() && (state.tournamentAdmins[tournamentId] || []).includes(state.currentUser);
   }
 
   function canManageTournament(tournamentId) {
@@ -94,14 +103,65 @@
       : "<li class='muted'>No admins yet for this tournament</li>";
   }
 
+  function pushEvent(tournament, message) {
+    tournament.eventLog = tournament.eventLog || [];
+    tournament.eventLog.unshift({
+      at: new Date().toISOString(),
+      by: state.currentUser,
+      message,
+    });
+    tournament.eventLog = tournament.eventLog.slice(0, 30);
+  }
+
+  function setTournamentStatus(tournament, nextStatus, reason) {
+    if (!TOURNAMENT_STATUSES.includes(nextStatus)) return;
+    tournament.status = nextStatus;
+    pushEvent(tournament, `Status -> ${nextStatus}${reason ? ` (${reason})` : ''}`);
+  }
+
+  function renderAdminPortalLock() {
+    const locked = !hasAdminSession();
+    document.querySelectorAll('.admin-protected').forEach((card) => {
+      card.classList.toggle('locked', locked);
+    });
+    el('admin-session-msg').textContent = locked
+      ? 'Login required: adminomgeving is vergrendeld tot je inlogt.'
+      : `Ingelogd als ${state.currentUser}.`;
+  }
+
+  function renderLifecycle(tournament) {
+    if (!tournament) return;
+    const status = tournament.status || 'draft';
+    el('tournament-status-badge').textContent = status;
+    el('lifecycle-msg').textContent = `Current phase: ${status}`;
+
+    const items = (tournament.eventLog || [])
+      .slice(0, 8)
+      .map((evt) => `<li>${new Date(evt.at).toLocaleString()} - ${evt.by}: ${evt.message}</li>`)
+      .join('');
+    el('event-log').innerHTML = items ? `<h4>Recent events</h4><ul>${items}</ul>` : "<p class='muted'>No events logged yet.</p>";
+  }
+
+  function renderKOButtons(t) {
+    const completion = Logic.getPouleCompletion(t?.matches || []);
+    const status = t?.status || 'draft';
+    const enabled = status === 'poules_closed' && completion.isComplete;
+    el('generate-ko').disabled = !enabled;
+    el('generate-ko-ranked').disabled = !enabled;
+    el('ko-gate-msg').textContent = enabled
+      ? 'KO ontgrendeld: poules gesloten en compleet.'
+      : `KO vergrendeld. Status: ${status}. Poules klaar: ${completion.done}/${completion.total}.`;
+  }
+
   function roleMessage() {
-    const role = isSuperAdmin()
+    const role = hasSuperAdminRole()
       ? 'Super Admin'
       : Object.values(state.tournamentAdmins).some((admins) => admins.includes(state.currentUser))
         ? 'Tournament Admin'
         : 'Public';
 
-    el('role-status').textContent = `${state.currentUser} role: ${role}`;
+    const sessionState = hasAdminSession() ? 'logged in' : 'not logged in';
+    el('role-status').textContent = `${state.currentUser} role: ${role} (${sessionState})`;
   }
 
   function renderScoreHistory() {
@@ -192,6 +252,30 @@
     });
 
     el('pace-output').innerHTML = blocks.join('');
+  }
+
+  function renderPouleOptions(tournament) {
+    if (!tournament) {
+      el('poule-options-output').innerHTML = '';
+      return;
+    }
+
+    const options = Logic.generatePouleOptions(tournament.users.length, tournament.boards, 2, 8).slice(0, 12);
+    if (!options.length) {
+      el('poule-options-output').innerHTML = "<p class='muted'>Voeg eerst spelers toe om opties te berekenen.</p>";
+      return;
+    }
+
+    el('poule-options-output').innerHTML = `<h4>Automatische opties (spelers + borden)</h4>${options
+      .map(
+        (option) =>
+          `<div class="option">
+            <p><strong>${option.pouleCount} poules × ${option.pouleSize}</strong> — ${option.totalMatches} matches, ±${option.estimatedRounds} rondes.</p>
+            <p class="hint">Spelers gebruikt: ${option.usedPlayers}/${tournament.users.length} (${option.leftoverPlayers} over).</p>
+            <button type="button" class="apply-poule-option" data-count="${option.pouleCount}" data-size="${option.pouleSize}">Use this option</button>
+          </div>`
+      )
+      .join('')}`;
   }
 
   function updateKOWriters(t) {
@@ -324,6 +408,8 @@
         state.tournamentAdmins = parsed.tournamentAdmins || {};
         state.tournaments = (parsed.tournaments || []).map(Store.ensureTournamentDefaults);
         state.currentUser = parsed.currentUser || 'alice';
+        state.adminPasswords = parsed.adminPasswords || state.adminPasswords || {};
+        state.adminSession = parsed.adminSession || { loggedIn: false, user: '' };
 
         saveState();
         bootstrap();
@@ -340,6 +426,30 @@
     el('refresh-role').addEventListener('click', () => {
       state.currentUser = el('current-user').value.trim().toLowerCase();
       roleMessage();
+      renderAdminPortalLock();
+      saveState();
+    });
+
+    el('admin-login').addEventListener('click', () => {
+      const user = el('current-user').value.trim().toLowerCase();
+      const password = el('current-password').value;
+      const expected = state.adminPasswords[user];
+      if (!expected || expected !== password) {
+        alert('Invalid admin login.');
+        return;
+      }
+      state.currentUser = user;
+      state.adminSession = { loggedIn: true, user };
+      el('current-password').value = '';
+      roleMessage();
+      renderAdminPortalLock();
+      saveState();
+    });
+
+    el('admin-logout').addEventListener('click', () => {
+      state.adminSession = { loggedIn: false, user: '' };
+      roleMessage();
+      renderAdminPortalLock();
       saveState();
     });
 
@@ -364,8 +474,11 @@
         date,
         boards,
         boardNames: boardNamesRaw,
+        status: 'draft',
+        eventLog: [],
       }));
       state.tournamentAdmins[id] = [state.currentUser];
+      pushEvent(state.tournaments[0], 'Tournament created');
 
       renderDashboard();
       ['admin-tournament', 'score-tournament'].forEach(tournamentOptions);
@@ -373,6 +486,9 @@
       renderPlayersAndAdmins();
       renderScoreMatches();
       renderLiveBoards();
+      renderLifecycle(state.tournaments[0]);
+      renderPouleOptions(state.tournaments[0]);
+      renderKOButtons(state.tournaments[0]);
       saveState();
       e.target.reset();
     });
@@ -385,7 +501,10 @@
       if (selected) {
         renderKoOutput(selected);
         renderStandings(selected);
+        renderLifecycle(selected);
+        renderPouleOptions(selected);
       }
+      renderKOButtons(selected);
     });
 
     el('live-tournament').addEventListener('change', renderLiveBoards);
@@ -420,9 +539,12 @@
       }
 
       if (!t.users.includes(player)) t.users.push(player);
+      pushEvent(t, `Player added: ${player}`);
       el('new-player').value = '';
       renderPlayersAndAdmins();
       renderDashboard();
+      renderPouleOptions(t);
+      renderLifecycle(t);
       saveState();
     });
 
@@ -446,10 +568,13 @@
           existing.add(p.toLowerCase());
         }
       });
+      pushEvent(t, `Bulk players added (${players.length})`);
 
       el('bulk-players').value = '';
       renderPlayersAndAdmins();
       renderDashboard();
+      renderPouleOptions(t);
+      renderLifecycle(t);
       saveState();
     });
 
@@ -471,13 +596,77 @@
       t.matches = [];
       t.ko = { winner: [], loser: [] };
       t.scoreHistory = [];
+      t.status = 'draft';
+      pushEvent(t, 'Tournament users and matches reset');
 
       renderPlayersAndAdmins();
       renderScoreMatches();
       renderKoOutput(t);
       renderPace();
       renderStandings(t);
+      renderLifecycle(t);
+      renderPouleOptions(t);
+      renderKOButtons(t);
       saveState();
+    });
+
+    el('status-start-poules').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t || !canManageTournament(t.id)) return;
+      if (!t.poules.length || !t.matches.filter((m) => m.phase === 'poule').length) {
+        alert('Generate poules and rounds before starting poules.');
+        return;
+      }
+      setTournamentStatus(t, 'poules_running');
+      renderLifecycle(t);
+      renderKOButtons(t);
+      saveState();
+    });
+
+    el('status-close-poules').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t || !canManageTournament(t.id)) return;
+      const completion = Logic.getPouleCompletion(t.matches);
+      if (!completion.isComplete) {
+        alert(`Cannot close poules yet (${completion.done}/${completion.total}).`);
+        return;
+      }
+      setTournamentStatus(t, 'poules_closed');
+      renderLifecycle(t);
+      renderKOButtons(t);
+      saveState();
+    });
+
+    el('status-start-ko').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t || !canManageTournament(t.id)) return;
+      if (!t.ko.winner.length && !t.ko.loser.length) {
+        alert('Generate KO brackets first.');
+        return;
+      }
+      setTournamentStatus(t, 'ko_running');
+      renderLifecycle(t);
+      saveState();
+    });
+
+    el('status-finish').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t || !canManageTournament(t.id)) return;
+      setTournamentStatus(t, 'finished');
+      renderLifecycle(t);
+      saveState();
+    });
+
+    el('calculate-poule-options').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      renderPouleOptions(t);
+    });
+
+    el('poule-options-output').addEventListener('click', (event) => {
+      const button = event.target.closest('.apply-poule-option');
+      if (!button) return;
+      el('poule-count').value = button.dataset.count;
+      el('poule-size').value = button.dataset.size;
     });
 
     el('generate-poules').addEventListener('click', () => {
@@ -489,14 +678,19 @@
 
       const t = getTournamentById(tid);
       if (!t) return;
+      if ((t.status || 'draft') !== 'draft') {
+        alert('Poules can only be generated while tournament status is draft.');
+        return;
+      }
 
       const pouleCount = Number(el('poule-count').value);
       const pouleSize = Number(el('poule-size').value);
       const playersNeeded = pouleCount * pouleSize;
       const players = t.users.slice(0, playersNeeded);
 
-      if (players.length < playersNeeded) {
-        el('poule-output').innerHTML = '<p>Not enough users to fill all poules.</p>';
+      if (t.users.length !== playersNeeded) {
+        el('poule-output').innerHTML = `<p>Kies een poule-optie die past bij alle spelers. Nu: ${t.users.length} spelers, gekozen schema gebruikt ${playersNeeded}.</p>`;
+        renderPouleOptions(t);
         return;
       }
 
@@ -506,6 +700,7 @@
       t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
       t.matches = t.matches.map((m) => ({ ...m, status: 'pending', round: 1 }));
       t.currentRound = 1;
+      pushEvent(t, `Poules generated (${pouleCount}x${pouleSize}, ${seedingMethod})`);
 
       el('poule-output').innerHTML = t.poules
         .map((p) => `<h4>${p.name}</h4><p>${p.players.join(', ')}</p>`)
@@ -515,6 +710,8 @@
       renderPace();
       renderStandings(t);
       renderLiveBoards();
+      renderLifecycle(t);
+      renderKOButtons(t);
       saveState();
     });
 
@@ -535,9 +732,12 @@
       const nonPoule = t.matches.filter((m) => m.phase !== 'poule');
       t.matches = [...scheduled, ...nonPoule];
       t.currentRound = 1;
+      pushEvent(t, 'Board rounds created');
 
       renderScoreMatches();
       renderLiveBoards();
+      renderLifecycle(t);
+      renderKOButtons(t);
       saveState();
     });
 
@@ -599,14 +799,21 @@
 
       const t = getTournamentById(tid);
       if (!t || t.poules.length === 0) return;
+      const completion = Logic.getPouleCompletion(t.matches);
+      if ((t.status || 'draft') !== 'poules_closed' || !completion.isComplete) {
+        alert(`KO is locked. Close poules first (${completion.done}/${completion.total}).`);
+        return;
+      }
 
       const ranked = t.poules.flatMap((p) => p.players);
       const mid = Math.ceil(ranked.length / 2);
       t.ko.winner = Logic.buildKOMatchesFromPlayers(ranked.slice(0, mid), t.boards, t.boardNames, 0);
       t.ko.loser = Logic.buildKOMatchesFromPlayers(ranked.slice(mid), t.boards, t.boardNames, 2);
+      pushEvent(t, 'KO generated from poule lists');
 
       renderKoOutput(t);
       renderScoreMatches();
+      renderLifecycle(t);
       saveState();
     });
 
@@ -619,13 +826,20 @@
 
       const t = getTournamentById(tid);
       if (!t || t.poules.length === 0) return;
+      const completion = Logic.getPouleCompletion(t.matches);
+      if ((t.status || 'draft') !== 'poules_closed' || !completion.isComplete) {
+        alert(`KO is locked. Close poules first (${completion.done}/${completion.total}).`);
+        return;
+      }
 
       const standings = calculateStandings(t);
       const ko = Logic.generateKOfromStandings(standings, t.boards, t.boardNames);
       t.ko.winner = ko.winner;
       t.ko.loser = ko.loser;
+      pushEvent(t, 'KO generated from standings');
       renderKoOutput(t);
       renderScoreMatches();
+      renderLifecycle(t);
       saveState();
     });
 
@@ -640,6 +854,10 @@
       const player = el('ko-fill-player').value.trim();
       const target = el('ko-fill-target').value;
       if (!t || !player) return;
+      if (!['poules_closed', 'ko_running'].includes(t.status || 'draft')) {
+        alert('Manual KO edits are allowed after poules are closed.');
+        return;
+      }
 
       const bracket = t.ko[target];
       if (!bracket.length) {
@@ -667,8 +885,10 @@
       }
 
       el('ko-fill-player').value = '';
+      pushEvent(t, `Manual KO add: ${player} -> ${target}`);
       renderKoOutput(t);
       renderScoreMatches();
+      renderLifecycle(t);
       saveState();
     });
 
@@ -694,6 +914,16 @@
       if (phase === 'ko-loser') match = t.ko.loser[idx];
       if (!match) return;
 
+      const status = t.status || 'draft';
+      if (phase === 'poule' && status !== 'poules_running') {
+        alert(`Poule score entry is only allowed while status is poules_running. Current: ${status}.`);
+        return;
+      }
+      if ((phase === 'ko-winner' || phase === 'ko-loser') && status !== 'ko_running') {
+        alert(`KO score entry is only allowed while status is ko_running. Current: ${status}.`);
+        return;
+      }
+
       if (match.scoreA != null || match.scoreB != null) {
         const confirmed = window.confirm('This match already has a score. Overwrite it?');
         if (!confirmed) return;
@@ -706,6 +936,7 @@
       match.updatedAt = new Date().toISOString();
 
       t.scoreHistory.unshift({ phase, a: match.a, b: match.b, scoreA, scoreB, by, at: match.updatedAt });
+      pushEvent(t, `Score saved (${phase}): ${match.a} ${scoreA}-${scoreB} ${match.b}`);
 
       updateKOWriters(t);
       if (phase === 'poule') {
@@ -719,6 +950,8 @@
       renderScoreMatches();
       renderStandings(t);
       renderLiveBoards();
+      renderLifecycle(t);
+      renderKOButtons(t);
 
       el('score-msg').textContent = `Saved ${match.a} ${scoreA}-${scoreB} ${match.b} by ${by} at ${new Date(match.updatedAt).toLocaleTimeString()}`;
       saveState();
@@ -765,6 +998,8 @@
       renderStandings(t);
       renderKoOutput(t);
       renderLiveBoards();
+      renderLifecycle(t);
+      renderKOButtons(t);
       saveState();
     });
 
@@ -793,7 +1028,11 @@
     if (selected) {
       renderKoOutput(selected);
       renderStandings(selected);
+      renderLifecycle(selected);
+      renderPouleOptions(selected);
     }
+    renderAdminPortalLock();
+    renderKOButtons(selected);
     renderLiveBoards();
 
     if ('serviceWorker' in navigator) {

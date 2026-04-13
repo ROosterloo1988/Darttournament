@@ -215,6 +215,46 @@
     return out;
   }
 
+  function generatePouleOptions(playerCount, boards, minSize = 3, maxSize = 6) {
+    const options = [];
+    for (let size = minSize; size <= maxSize; size += 1) {
+      for (let count = 1; count <= playerCount; count += 1) {
+        const used = count * size;
+        if (used > playerCount) break;
+        const leftover = playerCount - used;
+        const matchesPerPoule = (size * (size - 1)) / 2;
+        const totalMatches = matchesPerPoule * count;
+        const estimatedRounds = Math.ceil(totalMatches / Math.max(boards, 1));
+        options.push({
+          pouleCount: count,
+          pouleSize: size,
+          usedPlayers: used,
+          leftoverPlayers: leftover,
+          totalMatches,
+          estimatedRounds,
+          usesAllPlayers: leftover === 0,
+        });
+      }
+    }
+
+    return options.sort((a, b) => {
+      if (a.leftoverPlayers !== b.leftoverPlayers) return a.leftoverPlayers - b.leftoverPlayers;
+      if (a.estimatedRounds !== b.estimatedRounds) return a.estimatedRounds - b.estimatedRounds;
+      return a.pouleSize - b.pouleSize;
+    });
+  }
+
+  function getPouleCompletion(matches) {
+    const pouleMatches = (matches || []).filter((m) => m.phase === 'poule');
+    const total = pouleMatches.length;
+    const done = pouleMatches.filter((m) => m.scoreA != null && m.scoreB != null).length;
+    return {
+      total,
+      done,
+      isComplete: total > 0 && done === total,
+    };
+  }
+
   return {
     boardLabel,
     generateRoundRobin,
@@ -225,5 +265,7 @@
     generateBalancedPoules,
     getRoundSummary,
     normalizePlayers,
+    generatePouleOptions,
+    getPouleCompletion,
   };
 });

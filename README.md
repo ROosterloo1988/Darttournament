@@ -19,6 +19,10 @@ Starter PWA for running dart tournaments with:
 - Bulk player import (paste lines/comma-separated names)
 - One-click proefdraai simulation (full E2E local tournament flow)
 - Preflight validation + safe dry-run mode before live tournament day
+- Admin portal login gate (local password/session)
+- Tournament lifecycle states: draft → poules_running → poules_closed → ko_running → finished
+- KO generation lock until poules are closed and complete
+- Event log for key admin actions and phase transitions
 
 ## Run locally
 
@@ -73,7 +77,9 @@ What the script does:
 
 - Super admins (max 2): `alice`, `bob`
 - Tournament admin example: `charlie`
+- Demo password (local mode): `darts123`
 - Everyone can use **Score Form**
+- Admin sections are locked until admin login succeeds
 - Only super admins can create tournaments and assign tournament admins
 - Tournament admins/super admins can manage players, poules and knockout
 - Tournament users can be reset per tournament (clean list per event)

@@ -3,6 +3,7 @@
 
   const initialState = {
     superAdmins: ['alice', 'bob'],
+    adminPasswords: { alice: 'darts123', bob: 'darts123', charlie: 'darts123' },
     tournamentAdmins: { spring_open: ['charlie', 'alice'] },
     tournaments: [
       {
@@ -17,9 +18,12 @@
         matches: [],
         ko: { winner: [], loser: [] },
         scoreHistory: [],
+        status: 'draft',
+        eventLog: [],
       },
     ],
     currentUser: 'alice',
+    adminSession: { loggedIn: false, user: '' },
   };
 
   function ensureTournamentDefaults(t) {
@@ -36,6 +40,8 @@
       ko: t.ko || { winner: [], loser: [] },
       scoreHistory: t.scoreHistory || [],
       currentRound: t.currentRound || 1,
+      status: t.status || 'draft',
+      eventLog: t.eventLog || [],
     };
   }
 
@@ -50,6 +56,8 @@
       parsed.superAdmins = parsed.superAdmins || [];
       parsed.tournamentAdmins = parsed.tournamentAdmins || {};
       parsed.currentUser = parsed.currentUser || 'alice';
+      parsed.adminPasswords = parsed.adminPasswords || {};
+      parsed.adminSession = parsed.adminSession || { loggedIn: false, user: '' };
       parsed.tournaments = (parsed.tournaments || []).map(ensureTournamentDefaults);
       return parsed;
     } catch {

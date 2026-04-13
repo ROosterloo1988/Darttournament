@@ -43,3 +43,7 @@ ul { margin: 0; padding-left: 1.2rem; }
 #live-board-list .board-item { border: 1px solid #334155; border-radius: 8px; padding: .6rem; margin-bottom: .5rem; }
 #live-next-round { color: var(--muted); }
 #ko-output .ko-group { margin-bottom: .8rem; padding: .5rem; border: 1px solid #334155; border-radius: 8px; }
+.admin-protected.locked { opacity: .45; pointer-events: none; }
+#poule-options-output .option { border: 1px dashed #475569; padding: .5rem; border-radius: 8px; margin: .4rem 0; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.status-badge { text-transform: uppercase; font-size: .85rem; padding: .2rem .45rem; border-radius: 999px; background: #334155; }
