@@ -196,6 +196,25 @@
     };
   }
 
+  function normalizePlayers(input) {
+    const items = Array.isArray(input)
+      ? input
+      : String(input || '')
+          .split(/[\n,;]/g)
+          .map((v) => v.trim());
+
+    const seen = new Set();
+    const out = [];
+    items.forEach((name) => {
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(name);
+    });
+    return out;
+  }
+
   return {
     boardLabel,
     generateRoundRobin,
@@ -205,5 +224,6 @@
     schedulePouleMatches,
     generateBalancedPoules,
     getRoundSummary,
+    normalizePlayers,
   };
 });

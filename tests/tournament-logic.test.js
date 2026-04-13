@@ -10,6 +10,7 @@ const {
   schedulePouleMatches,
   generateBalancedPoules,
   getRoundSummary,
+  normalizePlayers,
 } = require('../src/tournament-logic');
 
 test('boardLabel uses custom board names in rotation', () => {
@@ -92,4 +93,10 @@ test('getRoundSummary reports completion for current round', () => {
   assert.equal(summary.done, 2);
   assert.equal(summary.isComplete, true);
   assert.equal(summary.maxRound, 2);
+});
+
+test('normalizePlayers trims and deduplicates case-insensitively', () => {
+  const raw = ' Ana\nBram\nana, Cem ; bram ';
+  const players = normalizePlayers(raw);
+  assert.deepEqual(players, ['Ana', 'Bram', 'Cem']);
 });
