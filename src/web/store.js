@@ -56,7 +56,7 @@
       parsed.superAdmins = parsed.superAdmins || [];
       parsed.tournamentAdmins = parsed.tournamentAdmins || {};
       parsed.currentUser = parsed.currentUser || 'alice';
-      parsed.adminPasswords = parsed.adminPasswords || {};
+      parsed.adminPasswords = { ...initialState.adminPasswords, ...(parsed.adminPasswords || {}) };
       parsed.adminSession = parsed.adminSession || { loggedIn: false, user: '' };
       parsed.tournaments = (parsed.tournaments || []).map(ensureTournamentDefaults);
       return parsed;

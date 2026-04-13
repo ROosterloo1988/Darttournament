@@ -215,33 +215,108 @@
     return out;
   }
 
-  function generatePouleOptions(playerCount, boards, minSize = 3, maxSize = 6) {
+  function boardUnitsForPouleSize(size) {
+    if (size === 3) return 0.5; // 2 poules of 3 on 1 board
+    if (size === 4 || size === 5) return 1; // 1 poule of 4/5 on 1 board
+    return Number.POSITIVE_INFINITY;
+  }
+
+  function getMaxParticipantsForBoards(boards) {
+    return Math.max(boards, 0) * 6;
+  }
+
+  function generatePouleOptions(playerCount, boards, minSize = 3, maxSize = 5) {
+    if (!playerCount || !boards || minSize !== 3 || maxSize !== 5) return [];
+    if (playerCount > getMaxParticipantsForBoards(boards)) return [];
+
     const options = [];
-    for (let size = minSize; size <= maxSize; size += 1) {
-      for (let count = 1; count <= playerCount; count += 1) {
-        const used = count * size;
-        if (used > playerCount) break;
-        const leftover = playerCount - used;
-        const matchesPerPoule = (size * (size - 1)) / 2;
-        const totalMatches = matchesPerPoule * count;
-        const estimatedRounds = Math.ceil(totalMatches / Math.max(boards, 1));
-        options.push({
-          pouleCount: count,
-          pouleSize: size,
-          usedPlayers: used,
-          leftoverPlayers: leftover,
-          totalMatches,
-          estimatedRounds,
-          usesAllPlayers: leftover === 0,
-        });
+    const max3 = Math.floor(playerCount / 3);
+    const max4 = Math.floor(playerCount / 4);
+    const max5 = Math.floor(playerCount / 5);
+
+    for (let c3 = 0; c3 <= max3; c3 += 1) {
+      for (let c4 = 0; c4 <= max4; c4 += 1) {
+        for (let c5 = 0; c5 <= max5; c5 += 1) {
+          const usedPlayers = c3 * 3 + c4 * 4 + c5 * 5;
+          if (usedPlayers !== playerCount) continue;
+          const boardUnits = c3 * boardUnitsForPouleSize(3) + c4 * boardUnitsForPouleSize(4) + c5 * boardUnitsForPouleSize(5);
+          if (boardUnits > boards) continue;
+
+          const sizes = [
+            ...Array.from({ length: c5 }, () => 5),
+            ...Array.from({ length: c4 }, () => 4),
+            ...Array.from({ length: c3 }, () => 3),
+          ];
+          const totalMatches = sizes.reduce((sum, size) => sum + (size * (size - 1)) / 2, 0);
+          options.push({
+            sizes,
+            pouleCount: sizes.length,
+            usedPlayers,
+            leftoverPlayers: 0,
+            totalMatches,
+            estimatedRounds: Math.ceil(totalMatches / boards),
+            boardUnits,
+            usesAllPlayers: true,
+          });
+        }
       }
     }
 
     return options.sort((a, b) => {
-      if (a.leftoverPlayers !== b.leftoverPlayers) return a.leftoverPlayers - b.leftoverPlayers;
       if (a.estimatedRounds !== b.estimatedRounds) return a.estimatedRounds - b.estimatedRounds;
-      return a.pouleSize - b.pouleSize;
+      if (a.pouleCount !== b.pouleCount) return a.pouleCount - b.pouleCount;
+      return b.sizes.join(',').localeCompare(a.sizes.join(','));
     });
+  }
+
+  function generatePoulesBySizes(players, sizes, method = 'snake') {
+    const source = method === 'random' ? shuffleArray(players) : [...players];
+    const poules = sizes.map((size, i) => ({
+      name: `Poule ${String.fromCharCode(65 + i)}`,
+      players: [],
+      targetSize: size,
+    }));
+
+    if (method === 'random') {
+      let cursor = 0;
+      poules.forEach((p) => {
+        p.players = source.slice(cursor, cursor + p.targetSize);
+        cursor += p.targetSize;
+      });
+      return poules.map(({ targetSize, ...rest }) => rest);
+    }
+
+    const slots = poules.flatMap((p, i) => Array.from({ length: p.targetSize }, () => i));
+    let left = 0;
+    let right = poules.length - 1;
+    let direction = 1;
+    for (let i = 0; i < slots.length; i += 1) {
+      slots[i] = direction === 1 ? left : right;
+      if (direction === 1) {
+        if (left >= right) direction = -1;
+        else left += 1;
+      } else if (right <= left) direction = 1;
+      else right -= 1;
+    }
+
+    source.forEach((player, idx) => {
+      const pouleIndex = slots[idx];
+      if (pouleIndex == null) return;
+      poules[pouleIndex].players.push(player);
+    });
+
+    return poules.map(({ targetSize, ...rest }) => rest);
+  }
+
+  function generatePoulesForAllPlayers(players, boards, method = 'snake') {
+    const options = generatePouleOptions(players.length, boards, 3, 5);
+    if (!options.length) {
+      throw new Error('No valid poule layout for all players with current board count (sizes must be 3-5).');
+    }
+    return {
+      option: options[0],
+      poules: generatePoulesBySizes(players, options[0].sizes, method),
+    };
   }
 
   function getPouleCompletion(matches) {
@@ -266,6 +341,9 @@
     getRoundSummary,
     normalizePlayers,
     generatePouleOptions,
+    generatePoulesBySizes,
+    generatePoulesForAllPlayers,
+    getMaxParticipantsForBoards,
     getPouleCompletion,
   };
 });

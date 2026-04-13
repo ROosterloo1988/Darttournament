@@ -13,6 +13,8 @@ const {
   normalizePlayers,
   generatePouleOptions,
   getPouleCompletion,
+  getMaxParticipantsForBoards,
+  generatePoulesBySizes,
 } = require('../src/tournament-logic');
 
 test('boardLabel uses custom board names in rotation', () => {
@@ -105,7 +107,12 @@ test('normalizePlayers trims and deduplicates case-insensitively', () => {
 
 test('generatePouleOptions includes full-usage option when possible', () => {
   const options = generatePouleOptions(16, 4, 4, 4);
-  assert.ok(options.some((o) => o.pouleCount === 4 && o.pouleSize === 4 && o.usesAllPlayers));
+  assert.equal(options.length, 0);
+});
+
+test('generatePouleOptions returns full allocation with 3-5 sizes', () => {
+  const options = generatePouleOptions(16, 4, 3, 5);
+  assert.ok(options.some((o) => o.sizes.reduce((s, n) => s + n, 0) === 16 && o.usesAllPlayers));
 });
 
 test('getPouleCompletion reports completion totals', () => {
@@ -117,4 +124,15 @@ test('getPouleCompletion reports completion totals', () => {
   assert.equal(status.total, 2);
   assert.equal(status.done, 1);
   assert.equal(status.isComplete, false);
+});
+
+test('max participants is 6 per board', () => {
+  assert.equal(getMaxParticipantsForBoards(4), 24);
+});
+
+test('generatePoulesBySizes assigns all players exactly', () => {
+  const players = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+  const poules = generatePoulesBySizes(players, [5, 5], 'snake');
+  assert.equal(poules.length, 2);
+  assert.equal(poules[0].players.length + poules[1].players.length, 10);
 });

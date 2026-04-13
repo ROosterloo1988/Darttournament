@@ -23,6 +23,8 @@ Starter PWA for running dart tournaments with:
 - Tournament lifecycle states: draft → poules_running → poules_closed → ko_running → finished
 - KO generation lock until poules are closed and complete
 - Event log for key admin actions and phase transitions
+- Poule regels: alle spelers worden altijd ingedeeld, poules zijn 3-5 spelers
+- Board-capacity regels: per bord 2×poule-3 of 1×poule-4/5 (max 6 spelers per bord)
 
 ## Run locally
 

@@ -260,9 +260,11 @@
       return;
     }
 
-    const options = Logic.generatePouleOptions(tournament.users.length, tournament.boards, 2, 8).slice(0, 12);
+    const options = Logic.generatePouleOptions(tournament.users.length, tournament.boards, 3, 5).slice(0, 12);
+    const maxPlayers = Logic.getMaxParticipantsForBoards(tournament.boards);
     if (!options.length) {
-      el('poule-options-output').innerHTML = "<p class='muted'>Voeg eerst spelers toe om opties te berekenen.</p>";
+      el('poule-options-output').innerHTML =
+        `<p class='muted'>Geen geldige poule-indeling gevonden voor ${tournament.users.length} spelers op ${tournament.boards} borden (max ${maxPlayers}).</p>`;
       return;
     }
 
@@ -270,9 +272,9 @@
       .map(
         (option) =>
           `<div class="option">
-            <p><strong>${option.pouleCount} poules × ${option.pouleSize}</strong> — ${option.totalMatches} matches, ±${option.estimatedRounds} rondes.</p>
-            <p class="hint">Spelers gebruikt: ${option.usedPlayers}/${tournament.users.length} (${option.leftoverPlayers} over).</p>
-            <button type="button" class="apply-poule-option" data-count="${option.pouleCount}" data-size="${option.pouleSize}">Use this option</button>
+            <p><strong>${option.pouleCount} poules</strong> — verdeling: ${option.sizes.join(', ')}</p>
+            <p class="hint">${option.totalMatches} matches, ±${option.estimatedRounds} rondes, board-load ${option.boardUnits}/${tournament.boards}.</p>
+            <button type="button" class="apply-poule-option" data-sizes="${option.sizes.join(',')}">Use this option</button>
           </div>`
       )
       .join('')}`;
@@ -311,19 +313,21 @@
   function validateTournamentSetup(t) {
     const pouleCount = Number(el('poule-count').value) || 2;
     const pouleSize = Number(el('poule-size').value) || 4;
-    const requiredPlayers = pouleCount * pouleSize;
     const uniquePlayers = new Set(t.users.map((u) => u.toLowerCase()));
     const admins = state.tournamentAdmins[t.id] || [];
+    const maxPlayers = Logic.getMaxParticipantsForBoards(t.boards);
+    const availableOptions = Logic.generatePouleOptions(t.users.length, t.boards, 3, 5);
 
     const checks = [
       { ok: t.boards > 0, label: `Boards configured (${t.boards})` },
-      { ok: t.users.length >= requiredPlayers, label: `Enough users (${t.users.length}/${requiredPlayers})` },
+      { ok: t.users.length <= maxPlayers, label: `Board capacity ok (${t.users.length}/${maxPlayers})` },
+      { ok: availableOptions.length > 0, label: `Valid 3-5 poule layout available (${availableOptions.length})` },
       { ok: uniquePlayers.size === t.users.length, label: 'No duplicate player names' },
       { ok: admins.length > 0, label: `Tournament admins assigned (${admins.length})` },
-      { ok: pouleSize >= 2, label: `Valid poule size (${pouleSize})` },
+      { ok: pouleSize >= 3 && pouleSize <= 5, label: `Valid preferred poule size (${pouleSize})` },
     ];
 
-    return { checks, valid: checks.every((c) => c.ok), pouleCount, pouleSize, requiredPlayers };
+    return { checks, valid: checks.every((c) => c.ok), pouleCount, pouleSize };
   }
 
   function renderChecks(title, checks, extra = []) {
@@ -665,8 +669,11 @@
     el('poule-options-output').addEventListener('click', (event) => {
       const button = event.target.closest('.apply-poule-option');
       if (!button) return;
-      el('poule-count').value = button.dataset.count;
-      el('poule-size').value = button.dataset.size;
+      const sizes = (button.dataset.sizes || '').split(',').map((v) => Number(v)).filter(Boolean);
+      if (!sizes.length) return;
+      el('poule-count').value = sizes.length;
+      el('poule-size').value = sizes[0];
+      el('poule-output').innerHTML = `<p>Geselecteerde poule-verdeling: ${sizes.join(', ')} (alle spelers worden ingedeeld).</p>`;
     });
 
     el('generate-poules').addEventListener('click', () => {
@@ -685,26 +692,29 @@
 
       const pouleCount = Number(el('poule-count').value);
       const pouleSize = Number(el('poule-size').value);
-      const playersNeeded = pouleCount * pouleSize;
-      const players = t.users.slice(0, playersNeeded);
-
-      if (t.users.length !== playersNeeded) {
-        el('poule-output').innerHTML = `<p>Kies een poule-optie die past bij alle spelers. Nu: ${t.users.length} spelers, gekozen schema gebruikt ${playersNeeded}.</p>`;
+      if (pouleSize < 3 || pouleSize > 5) {
+        el('poule-output').innerHTML = '<p>Poule size moet tussen 3 en 5 liggen.</p>';
+        return;
+      }
+      const options = Logic.generatePouleOptions(t.users.length, t.boards, 3, 5);
+      if (!options.length) {
+        el('poule-output').innerHTML = `<p>Geen geldige poule-verdeling mogelijk voor ${t.users.length} spelers op ${t.boards} borden.</p>`;
         renderPouleOptions(t);
         return;
       }
+      const preferred = options.find((o) => o.pouleCount === pouleCount && o.sizes[0] === pouleSize) || options[0];
 
       const seedingMethod = el('seeding-method').value;
-      t.poules = Logic.generateBalancedPoules(players, pouleCount, pouleSize, seedingMethod);
+      t.poules = Logic.generatePoulesBySizes(t.users, preferred.sizes, seedingMethod);
 
       t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
       t.matches = t.matches.map((m) => ({ ...m, status: 'pending', round: 1 }));
       t.currentRound = 1;
-      pushEvent(t, `Poules generated (${pouleCount}x${pouleSize}, ${seedingMethod})`);
+      pushEvent(t, `Poules generated (${preferred.sizes.join(', ')}, ${seedingMethod})`);
 
       el('poule-output').innerHTML = t.poules
         .map((p) => `<h4>${p.name}</h4><p>${p.players.join(', ')}</p>`)
-        .join('') + `<p><strong>Generated matches:</strong> ${t.matches.length}</p>`;
+        .join('') + `<p><strong>Generated matches:</strong> ${t.matches.length}</p><p><strong>Poule sizes:</strong> ${preferred.sizes.join(', ')}</p>`;
 
       renderScoreMatches();
       renderPace();
