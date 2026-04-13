@@ -1,0 +1,9 @@
+{
+  "name": "Darttournament PWA",
+  "short_name": "Darttour",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1120",
+  "theme_color": "#0f172a",
+  "icons": []
+}
