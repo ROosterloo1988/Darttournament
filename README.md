@@ -17,6 +17,7 @@ Starter PWA for running dart tournaments with:
 - Auto-advance to next round when all matches in current round are completed
 - Print-friendly poule schedule export
 - Bulk player import (paste lines/comma-separated names)
+- One-click proefdraai simulation (full E2E local tournament flow)
 
 ## Run locally
 

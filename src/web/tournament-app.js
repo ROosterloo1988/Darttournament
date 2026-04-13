@@ -218,6 +218,64 @@
     URL.revokeObjectURL(url);
   }
 
+  function randomWinningScore() {
+    const winner = 3;
+    const loser = Math.floor(Math.random() * 3);
+    return Math.random() > 0.5 ? [winner, loser] : [loser, winner];
+  }
+
+  function runProefdraai(t) {
+    const pouleCount = Number(el('poule-count').value) || 2;
+    const pouleSize = Number(el('poule-size').value) || 4;
+    const totalPlayers = pouleCount * pouleSize;
+
+    if (t.users.length < totalPlayers) {
+      const extra = totalPlayers - t.users.length;
+      const base = t.users.length;
+      for (let i = 1; i <= extra; i += 1) {
+        t.users.push(`DemoPlayer${base + i}`);
+      }
+    }
+
+    const seedingMethod = el('seeding-method').value;
+    t.poules = Logic.generateBalancedPoules(t.users.slice(0, totalPlayers), pouleCount, pouleSize, seedingMethod);
+    t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
+    t.matches = Logic.schedulePouleMatches(t.matches, t.boards, t.boardNames).map((m) => ({ ...m, status: 'pending' }));
+    t.currentRound = 1;
+
+    t.matches.forEach((m) => {
+      const [a, b] = randomWinningScore();
+      m.scoreA = a;
+      m.scoreB = b;
+      m.status = 'done';
+      m.updatedBy = 'proefdraai-bot';
+      m.updatedAt = new Date().toISOString();
+    });
+    t.currentRound = Logic.getRoundSummary(t.matches, t.currentRound).maxRound;
+
+    const standings = calculateStandings(t);
+    const ko = Logic.generateKOfromStandings(standings, t.boards, t.boardNames);
+    t.ko.winner = ko.winner;
+    t.ko.loser = ko.loser;
+
+    [...t.ko.winner, ...t.ko.loser].forEach((m) => {
+      const [a, b] = randomWinningScore();
+      m.scoreA = a;
+      m.scoreB = b;
+      m.updatedBy = 'proefdraai-bot';
+      m.updatedAt = new Date().toISOString();
+    });
+
+    const report = [
+      `Players: ${t.users.length}`,
+      `Poules: ${t.poules.length}`,
+      `Poule matches scored: ${t.matches.filter((m) => m.scoreA != null && m.scoreB != null).length}/${t.matches.length}`,
+      `Winner KO matches: ${t.ko.winner.length}`,
+      `Loser KO matches: ${t.ko.loser.length}`,
+    ];
+    el('proefdraai-output').innerHTML = `<p><strong>Proefdraai completed</strong></p><ul>${report.map((r) => `<li>${r}</li>`).join('')}</ul>`;
+  }
+
   function importBackup(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -638,6 +696,25 @@
       const file = event.target.files?.[0];
       if (file) importBackup(file);
       event.target.value = '';
+    });
+
+    el('run-proefdraai').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t) return;
+      if (!canManageTournament(t.id)) {
+        alert('Only assigned tournament admins or super admins can run proefdraai.');
+        return;
+      }
+
+      runProefdraai(t);
+      renderDashboard();
+      renderPlayersAndAdmins();
+      renderScoreMatches();
+      renderPace();
+      renderStandings(t);
+      renderKoOutput(t);
+      renderLiveBoards();
+      saveState();
     });
   }
 
