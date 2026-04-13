@@ -18,6 +18,7 @@ Starter PWA for running dart tournaments with:
 - Print-friendly poule schedule export
 - Bulk player import (paste lines/comma-separated names)
 - One-click proefdraai simulation (full E2E local tournament flow)
+- Preflight validation + safe dry-run mode before live tournament day
 
 ## Run locally
 

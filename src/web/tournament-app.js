@@ -224,26 +224,56 @@
     return Math.random() > 0.5 ? [winner, loser] : [loser, winner];
   }
 
-  function runProefdraai(t) {
+  function validateTournamentSetup(t) {
+    const pouleCount = Number(el('poule-count').value) || 2;
+    const pouleSize = Number(el('poule-size').value) || 4;
+    const requiredPlayers = pouleCount * pouleSize;
+    const uniquePlayers = new Set(t.users.map((u) => u.toLowerCase()));
+    const admins = state.tournamentAdmins[t.id] || [];
+
+    const checks = [
+      { ok: t.boards > 0, label: `Boards configured (${t.boards})` },
+      { ok: t.users.length >= requiredPlayers, label: `Enough users (${t.users.length}/${requiredPlayers})` },
+      { ok: uniquePlayers.size === t.users.length, label: 'No duplicate player names' },
+      { ok: admins.length > 0, label: `Tournament admins assigned (${admins.length})` },
+      { ok: pouleSize >= 2, label: `Valid poule size (${pouleSize})` },
+    ];
+
+    return { checks, valid: checks.every((c) => c.ok), pouleCount, pouleSize, requiredPlayers };
+  }
+
+  function renderChecks(title, checks, extra = []) {
+    const lines = checks
+      .map((c) => `<li>${c.ok ? '✅' : '❌'} ${c.label}</li>`)
+      .join('');
+    const extraLines = extra.map((e) => `<li>ℹ️ ${e}</li>`).join('');
+    el('proefdraai-output').innerHTML = `<p><strong>${title}</strong></p><ul>${lines}${extraLines}</ul>`;
+  }
+
+  function runProefdraai(t, options = { allowDemoFill: false, apply: false }) {
     const pouleCount = Number(el('poule-count').value) || 2;
     const pouleSize = Number(el('poule-size').value) || 4;
     const totalPlayers = pouleCount * pouleSize;
+    const target = options.apply ? t : structuredClone(t);
 
-    if (t.users.length < totalPlayers) {
-      const extra = totalPlayers - t.users.length;
-      const base = t.users.length;
+    if (target.users.length < totalPlayers) {
+      if (!options.allowDemoFill) {
+        throw new Error(`Not enough users for configured poules (${target.users.length}/${totalPlayers}).`);
+      }
+      const extra = totalPlayers - target.users.length;
+      const base = target.users.length;
       for (let i = 1; i <= extra; i += 1) {
-        t.users.push(`DemoPlayer${base + i}`);
+        target.users.push(`DemoPlayer${base + i}`);
       }
     }
 
     const seedingMethod = el('seeding-method').value;
-    t.poules = Logic.generateBalancedPoules(t.users.slice(0, totalPlayers), pouleCount, pouleSize, seedingMethod);
-    t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
-    t.matches = Logic.schedulePouleMatches(t.matches, t.boards, t.boardNames).map((m) => ({ ...m, status: 'pending' }));
-    t.currentRound = 1;
+    target.poules = Logic.generateBalancedPoules(target.users.slice(0, totalPlayers), pouleCount, pouleSize, seedingMethod);
+    target.matches = target.poules.flatMap((p) => Logic.generateRoundRobin(p.players, target.boards, target.boardNames, p.name));
+    target.matches = Logic.schedulePouleMatches(target.matches, target.boards, target.boardNames).map((m) => ({ ...m, status: 'pending' }));
+    target.currentRound = 1;
 
-    t.matches.forEach((m) => {
+    target.matches.forEach((m) => {
       const [a, b] = randomWinningScore();
       m.scoreA = a;
       m.scoreB = b;
@@ -251,14 +281,14 @@
       m.updatedBy = 'proefdraai-bot';
       m.updatedAt = new Date().toISOString();
     });
-    t.currentRound = Logic.getRoundSummary(t.matches, t.currentRound).maxRound;
+    target.currentRound = Logic.getRoundSummary(target.matches, target.currentRound).maxRound;
 
-    const standings = calculateStandings(t);
-    const ko = Logic.generateKOfromStandings(standings, t.boards, t.boardNames);
-    t.ko.winner = ko.winner;
-    t.ko.loser = ko.loser;
+    const standings = Logic.calculatePouleStandings(target.poules, target.matches);
+    const ko = Logic.generateKOfromStandings(standings, target.boards, target.boardNames);
+    target.ko.winner = ko.winner;
+    target.ko.loser = ko.loser;
 
-    [...t.ko.winner, ...t.ko.loser].forEach((m) => {
+    [...target.ko.winner, ...target.ko.loser].forEach((m) => {
       const [a, b] = randomWinningScore();
       m.scoreA = a;
       m.scoreB = b;
@@ -267,13 +297,17 @@
     });
 
     const report = [
-      `Players: ${t.users.length}`,
-      `Poules: ${t.poules.length}`,
-      `Poule matches scored: ${t.matches.filter((m) => m.scoreA != null && m.scoreB != null).length}/${t.matches.length}`,
-      `Winner KO matches: ${t.ko.winner.length}`,
-      `Loser KO matches: ${t.ko.loser.length}`,
+      `Players: ${target.users.length}`,
+      `Poules: ${target.poules.length}`,
+      `Poule matches scored: ${target.matches.filter((m) => m.scoreA != null && m.scoreB != null).length}/${target.matches.length}`,
+      `Winner KO matches: ${target.ko.winner.length}`,
+      `Loser KO matches: ${target.ko.loser.length}`,
+      options.apply ? 'Applied to current tournament data' : 'Dry-run only (no data changed)',
     ];
-    el('proefdraai-output').innerHTML = `<p><strong>Proefdraai completed</strong></p><ul>${report.map((r) => `<li>${r}</li>`).join('')}</ul>`;
+    if (options.apply) {
+      Object.assign(t, target);
+    }
+    el('proefdraai-output').innerHTML = `<p><strong>Proefdraai completed</strong></p><ul>${report.map((r) => `<li>✅ ${r}</li>`).join('')}</ul>`;
   }
 
   function importBackup(file) {
@@ -706,7 +740,24 @@
         return;
       }
 
-      runProefdraai(t);
+      const preflight = validateTournamentSetup(t);
+      if (!preflight.valid && !el('allow-demo-fill').checked) {
+        renderChecks('Preflight failed', preflight.checks, [
+          'Fix failed items first, or explicitly enable demo autofill for a synthetic dry-run.',
+        ]);
+        return;
+      }
+
+      try {
+        runProefdraai(t, {
+          allowDemoFill: el('allow-demo-fill').checked,
+          apply: el('apply-proefdraai').checked,
+        });
+      } catch (error) {
+        el('proefdraai-output').innerHTML = `<p><strong>Proefdraai failed</strong></p><p>${error.message}</p>`;
+        return;
+      }
+
       renderDashboard();
       renderPlayersAndAdmins();
       renderScoreMatches();
@@ -715,6 +766,15 @@
       renderKoOutput(t);
       renderLiveBoards();
       saveState();
+    });
+
+    el('run-preflight').addEventListener('click', () => {
+      const t = getTournamentById(el('admin-tournament').value);
+      if (!t) return;
+      const preflight = validateTournamentSetup(t);
+      renderChecks(preflight.valid ? 'Preflight passed' : 'Preflight failed', preflight.checks, [
+        `Configured poules: ${preflight.pouleCount} x ${preflight.pouleSize}`,
+      ]);
     });
   }
 

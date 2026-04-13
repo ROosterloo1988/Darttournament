@@ -191,7 +191,10 @@
 
         <div class="card">
           <h2>Proefdraai (End-to-end test)</h2>
-          <p class="hint">Runs a full local simulation: poules, rounds, scores, standings and KO.</p>
+          <p class="hint">Runs a full flow check on your selected real tournament setup.</p>
+          <button id="run-preflight" type="button">Run preflight checks</button>
+          <label><input id="allow-demo-fill" type="checkbox" /> Allow demo player autofill (only if needed)</label>
+          <label><input id="apply-proefdraai" type="checkbox" /> Apply proefdraai scores to current tournament</label>
           <button id="run-proefdraai" type="button">Run full proefdraai</button>
           <div id="proefdraai-output"></div>
         </div>
