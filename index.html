@@ -56,6 +56,9 @@
                 <option value="ko-loser">KO Loser</option>
               </select>
             </label>
+            <label>Board
+              <select id="score-board"></select>
+            </label>
             <label>Match
               <select id="score-match"></select>
             </label>
@@ -66,10 +69,20 @@
             <label>Your name
               <input id="score-submitter" required placeholder="Who writes this score?" />
             </label>
+            <label>180-ers (namen, komma of nieuwe regel)
+              <textarea id="score-180" rows="2" placeholder="Naam 1, Naam 2"></textarea>
+            </label>
+            <label>100+ finishes (meerdere per regel toegestaan)
+              <textarea id="score-finish100" rows="2" placeholder="Naam 1&#10;Naam 2"></textarea>
+            </label>
+            <label>&le;15 darters (meerdere per regel toegestaan)
+              <textarea id="score-15darters" rows="2" placeholder="Naam 1&#10;Naam 2"></textarea>
+            </label>
             <button type="submit">Save score</button>
           </form>
           <p id="score-msg" class="msg"></p>
           <div id="score-history"></div>
+          <div id="special-standings"></div>
         </div>
       </section>
 
@@ -82,6 +95,7 @@
           <div id="live-round-meta"></div>
           <div id="live-board-list"></div>
           <div id="live-next-round"></div>
+          <div id="live-board-schedule"></div>
         </div>
       </section>
 

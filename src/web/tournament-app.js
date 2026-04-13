@@ -81,6 +81,19 @@
     el('live-next-round').innerHTML = nextMatches.length
       ? `<p><strong>Next round preview:</strong> ${nextMatches.length} match(es) ready.</p>`
       : "<p>No next round scheduled yet.</p>";
+
+    const boardSchedule = Array.from({ length: t.boards }, (_, i) => i + 1)
+      .map((board) => {
+        const boardMatches = t.matches
+          .filter((m) => m.phase === 'poule' && m.board === board)
+          .sort((a, b) => (a.round || 1) - (b.round || 1));
+        if (!boardMatches.length) return '';
+        return `<h4>${Logic.boardLabel(t.boardNames, t.boards, board)}</h4><ul>${boardMatches
+          .map((m) => `<li>R${m.round || 1}: ${m.a} vs ${m.b} — Writer: ${m.writer} — ${m.status || 'pending'}</li>`)
+          .join('')}</ul>`;
+      })
+      .join('');
+    el('live-board-schedule').innerHTML = boardSchedule || "<p class='muted'>No board schedule yet.</p>";
   }
 
   function renderDashboard() {
@@ -182,9 +195,70 @@
         .join('');
   }
 
+  function parseSpecialEntries(raw) {
+    return String(raw || '')
+      .split(/[\n,;]+/g)
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+
+  function recomputeSpecialStandings(tournament) {
+    const scoreboard = {};
+    const allMatches = [
+      ...tournament.matches,
+      ...tournament.ko.winner.map((m) => ({ ...m, phase: 'ko-winner' })),
+      ...tournament.ko.loser.map((m) => ({ ...m, phase: 'ko-loser' })),
+    ];
+
+    allMatches.forEach((match) => {
+      const specials = match.specials || { s180: [], finish100: [], d15: [] };
+      specials.s180.forEach((name) => {
+        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
+        scoreboard[name].s180 += 1;
+      });
+      specials.finish100.forEach((name) => {
+        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
+        scoreboard[name].finish100 += 1;
+      });
+      specials.d15.forEach((name) => {
+        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
+        scoreboard[name].d15 += 1;
+      });
+    });
+
+    tournament.specialStandings = scoreboard;
+    return scoreboard;
+  }
+
+  function renderSpecialStandings(tournament) {
+    const standings = recomputeSpecialStandings(tournament);
+    const rows = Object.entries(standings)
+      .sort((a, b) => (b[1].s180 + b[1].finish100 + b[1].d15) - (a[1].s180 + a[1].finish100 + a[1].d15))
+      .map(([name, stats]) => `<tr><td>${name}</td><td>${stats.s180}</td><td>${stats.finish100}</td><td>${stats.d15}</td></tr>`)
+      .join('');
+    el('special-standings').innerHTML = rows
+      ? `<h4>Bijzondere scores stand</h4><table><thead><tr><th>Speler</th><th>180</th><th>100+ F</th><th>&le;15D</th></tr></thead><tbody>${rows}</tbody></table>`
+      : "<p class='muted'>Nog geen bijzondere scores ingevoerd.</p>";
+  }
+
+  function renderScoreBoards() {
+    const t = getTournamentById(el('score-tournament').value);
+    const phase = el('score-phase').value;
+    if (!t) return;
+    let list = [];
+    if (phase === 'poule') list = t.matches.filter((m) => m.phase === 'poule');
+    if (phase === 'ko-winner') list = t.ko.winner;
+    if (phase === 'ko-loser') list = t.ko.loser;
+    const boards = [...new Set(list.map((m) => m.board).filter((b) => b != null))].sort((a, b) => a - b);
+    el('score-board').innerHTML = `<option value="all">All boards</option>${boards
+      .map((b) => `<option value="${b}">${Logic.boardLabel(t.boardNames, t.boards, b)}</option>`)
+      .join('')}`;
+  }
+
   function renderScoreMatches() {
     const tid = el('score-tournament').value;
     const phase = el('score-phase').value;
+    const boardFilter = el('score-board')?.value || 'all';
     const t = getTournamentById(tid);
     const list = [];
 
@@ -192,12 +266,14 @@
     if (phase === 'poule') list.push(...t.matches.filter((m) => m.phase === 'poule'));
     if (phase === 'ko-winner') list.push(...t.ko.winner.map((m) => ({ ...m, phase: 'ko-winner' })));
     if (phase === 'ko-loser') list.push(...t.ko.loser.map((m) => ({ ...m, phase: 'ko-loser' })));
+    const filtered = boardFilter === 'all' ? list : list.filter((m) => String(m.board) === String(boardFilter));
 
-    el('score-match').innerHTML = list
+    el('score-match').innerHTML = filtered
       .map((m, i) => `<option value="${i}">${m.a} vs ${m.b} (${m.boardLabel || `Board ${m.board}`}, writer ${m.writer})</option>`)
       .join('');
 
     renderScoreHistory();
+    renderSpecialStandings(t);
   }
 
   function calculateStandings(t) {
@@ -488,6 +564,7 @@
       ['admin-tournament', 'score-tournament'].forEach(tournamentOptions);
       tournamentOptions('live-tournament');
       renderPlayersAndAdmins();
+      renderScoreBoards();
       renderScoreMatches();
       renderLiveBoards();
       renderLifecycle(state.tournaments[0]);
@@ -500,6 +577,7 @@
     el('admin-tournament').addEventListener('change', () => {
       renderPlayersAndAdmins();
       renderPace();
+      renderScoreBoards();
       renderScoreMatches();
       const selected = getTournamentById(el('admin-tournament').value);
       if (selected) {
@@ -604,6 +682,7 @@
       pushEvent(t, 'Tournament users and matches reset');
 
       renderPlayersAndAdmins();
+      renderScoreBoards();
       renderScoreMatches();
       renderKoOutput(t);
       renderPace();
@@ -717,6 +796,7 @@
         .join('') + `<p><strong>Generated matches:</strong> ${t.matches.length}</p><p><strong>Poule sizes:</strong> ${preferred.sizes.join(', ')}</p>`;
 
       renderScoreMatches();
+      renderScoreBoards();
       renderPace();
       renderStandings(t);
       renderLiveBoards();
@@ -745,6 +825,7 @@
       pushEvent(t, 'Board rounds created');
 
       renderScoreMatches();
+      renderScoreBoards();
       renderLiveBoards();
       renderLifecycle(t);
       renderKOButtons(t);
@@ -823,6 +904,7 @@
 
       renderKoOutput(t);
       renderScoreMatches();
+      renderScoreBoards();
       renderLifecycle(t);
       saveState();
     });
@@ -849,6 +931,7 @@
       pushEvent(t, 'KO generated from standings');
       renderKoOutput(t);
       renderScoreMatches();
+      renderScoreBoards();
       renderLifecycle(t);
       saveState();
     });
@@ -898,14 +981,22 @@
       pushEvent(t, `Manual KO add: ${player} -> ${target}`);
       renderKoOutput(t);
       renderScoreMatches();
+      renderScoreBoards();
       renderLifecycle(t);
       saveState();
     });
 
     el('simulate-progress').addEventListener('click', renderPace);
 
-    el('score-tournament').addEventListener('change', renderScoreMatches);
-    el('score-phase').addEventListener('change', renderScoreMatches);
+    el('score-tournament').addEventListener('change', () => {
+      renderScoreBoards();
+      renderScoreMatches();
+    });
+    el('score-phase').addEventListener('change', () => {
+      renderScoreBoards();
+      renderScoreMatches();
+    });
+    el('score-board').addEventListener('change', renderScoreMatches);
 
     el('score-form-element').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -913,15 +1004,18 @@
       if (!t) return;
 
       const phase = el('score-phase').value;
+      const boardFilter = el('score-board').value;
       const idx = Number(el('score-match').value);
       const scoreA = Number(el('score-a').value);
       const scoreB = Number(el('score-b').value);
       const by = el('score-submitter').value.trim();
 
-      let match;
-      if (phase === 'poule') match = t.matches.filter((m) => m.phase === 'poule')[idx];
-      if (phase === 'ko-winner') match = t.ko.winner[idx];
-      if (phase === 'ko-loser') match = t.ko.loser[idx];
+      let candidates = [];
+      if (phase === 'poule') candidates = t.matches.filter((m) => m.phase === 'poule');
+      if (phase === 'ko-winner') candidates = t.ko.winner;
+      if (phase === 'ko-loser') candidates = t.ko.loser;
+      if (boardFilter !== 'all') candidates = candidates.filter((m) => String(m.board) === String(boardFilter));
+      const match = candidates[idx];
       if (!match) return;
 
       const status = t.status || 'draft';
@@ -935,8 +1029,8 @@
       }
 
       if (match.scoreA != null || match.scoreB != null) {
-        const confirmed = window.confirm('This match already has a score. Overwrite it?');
-        if (!confirmed) return;
+        alert('Deze wedstrijd is al ingevuld en kan niet meer aangepast worden.');
+        return;
       }
 
       match.scoreA = scoreA;
@@ -944,6 +1038,11 @@
       if (phase === 'poule') match.status = 'done';
       match.updatedBy = by;
       match.updatedAt = new Date().toISOString();
+      match.specials = {
+        s180: parseSpecialEntries(el('score-180').value),
+        finish100: parseSpecialEntries(el('score-finish100').value),
+        d15: parseSpecialEntries(el('score-15darters').value),
+      };
 
       t.scoreHistory.unshift({ phase, a: match.a, b: match.b, scoreA, scoreB, by, at: match.updatedAt });
       pushEvent(t, `Score saved (${phase}): ${match.a} ${scoreA}-${scoreB} ${match.b}`);
@@ -1030,6 +1129,7 @@
     tournamentOptions('live-tournament');
     renderPlayersAndAdmins();
     roleMessage();
+    renderScoreBoards();
     renderScoreMatches();
     bindEvents();
     renderPace();

@@ -107,38 +107,49 @@
   }
 
   function schedulePouleMatches(matches, boards, boardNames = []) {
-    const rounds = [];
-    const scheduled = matches.map((m) => ({ ...m }));
+    const unscheduled = matches.map((m) => ({ ...m }));
+    const out = [];
+    const lastRoundPlayed = {};
+    let roundNumber = 1;
 
-    scheduled.forEach((match) => {
-      let placed = false;
+    while (unscheduled.length) {
+      const round = { players: new Set(), matches: [] };
+      while (round.matches.length < boards) {
+        let bestIdx = -1;
+        let bestPenalty = Number.POSITIVE_INFINITY;
 
-      for (let r = 0; r < rounds.length; r += 1) {
-        const round = rounds[r];
-        const playersBusy = round.players.has(match.a) || round.players.has(match.b);
-        const boardFull = round.matches.length >= boards;
-        if (playersBusy || boardFull) continue;
+        unscheduled.forEach((match, idx) => {
+          const playersBusy = round.players.has(match.a) || round.players.has(match.b);
+          if (playersBusy) return;
+          const penalty =
+            (lastRoundPlayed[match.a] === roundNumber - 1 ? 1 : 0) +
+            (lastRoundPlayed[match.b] === roundNumber - 1 ? 1 : 0);
+          if (penalty < bestPenalty) {
+            bestPenalty = penalty;
+            bestIdx = idx;
+          }
+        });
 
+        if (bestIdx === -1) break;
+        const [match] = unscheduled.splice(bestIdx, 1);
         round.players.add(match.a);
         round.players.add(match.b);
         round.matches.push(match);
-        match.round = r + 1;
-        match.board = round.matches.length;
-        match.boardLabel = boardLabel(boardNames, boards, match.board);
-        placed = true;
-        break;
+        lastRoundPlayed[match.a] = roundNumber;
+        lastRoundPlayed[match.b] = roundNumber;
       }
 
-      if (!placed) {
-        const newRound = { players: new Set([match.a, match.b]), matches: [match] };
-        rounds.push(newRound);
-        match.round = rounds.length;
-        match.board = 1;
-        match.boardLabel = boardLabel(boardNames, boards, 1);
-      }
-    });
+      round.matches.forEach((match, idx) => {
+        match.round = roundNumber;
+        match.board = idx + 1;
+        match.boardLabel = boardLabel(boardNames, boards, idx + 1);
+        out.push(match);
+      });
 
-    return scheduled;
+      roundNumber += 1;
+    }
+
+    return out;
   }
 
   function shuffleArray(items) {

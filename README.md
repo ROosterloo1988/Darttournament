@@ -25,6 +25,8 @@ Starter PWA for running dart tournaments with:
 - Event log for key admin actions and phase transitions
 - Poule regels: alle spelers worden altijd ingedeeld, poules zijn 3-5 spelers
 - Board-capacity regels: per bord 2×poule-3 of 1×poule-4/5 (max 6 spelers per bord)
+- Score invoer per bord + bijzondere scores (180, 100+ finishes, ≤15 darters) met stand
+- Ingevoerde wedstrijden zijn vergrendeld (geen overschrijven van score)
 
 ## Run locally
 
