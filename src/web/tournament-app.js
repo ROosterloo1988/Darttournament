@@ -125,7 +125,7 @@
       card.classList.toggle('locked', locked);
     });
     el('admin-session-msg').textContent = locked
-      ? 'Login required: adminomgeving is vergrendeld tot je inlogt.'
+      ? 'Log eerst in om admin-acties uit te voeren. Knoppen blijven zichtbaar met meldingen.'
       : `Ingelogd als ${state.currentUser}.`;
   }
 
