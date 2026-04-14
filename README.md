@@ -48,6 +48,19 @@ Run tests:
 npm test
 ```
 
+## FastAPI + Jinja2 mode (new)
+
+A server-rendered variant is available under `server/` with:
+- FastAPI routes (`server/main.py`)
+- Jinja2 templates (`server/templates/`)
+- Vanilla JS (`server/static/`)
+
+Run with:
+
+```bash
+uvicorn server.main:app --reload
+```
+
 Real-event guide:
 
 ```bash
