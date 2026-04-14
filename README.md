@@ -75,6 +75,12 @@ There is now an installer script for a bare Ubuntu VPS:
 sudo ./scripts/install_ubuntu.sh
 ```
 
+For FastAPI + Jinja2 mode behind nginx:
+
+```bash
+sudo ./scripts/install_ubuntu.sh --mode fastapi
+```
+
 With custom repo/branch:
 
 ```bash

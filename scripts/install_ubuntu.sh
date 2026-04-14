@@ -5,10 +5,12 @@ APP_NAME="darttournament"
 APP_DIR="/opt/${APP_NAME}"
 WEB_ROOT="/var/www/${APP_NAME}/current"
 NGINX_SITE="/etc/nginx/sites-available/${APP_NAME}"
+SYSTEMD_SERVICE="/etc/systemd/system/${APP_NAME}.service"
 REPO_URL="https://github.com/ROosterloo1988/zomercompetitie"
 DOMAIN=""
 EMAIL=""
 BRANCH="main"
+MODE="static" # static | fastapi
 
 usage() {
   cat <<USAGE
@@ -19,10 +21,12 @@ Options:
   --branch <name>     Git branch to deploy (default: ${BRANCH})
   --domain <domain>   Optional domain for nginx/certbot TLS
   --email <email>     Email for Let's Encrypt (required with --domain)
+  --mode <type>       Deploy mode: static or fastapi (default: ${MODE})
   --help              Show this help
 
 Examples:
   sudo ./scripts/install_ubuntu.sh
+  sudo ./scripts/install_ubuntu.sh --mode fastapi
   sudo ./scripts/install_ubuntu.sh --repo https://github.com/your/repo --branch main
   sudo ./scripts/install_ubuntu.sh --domain darts.example.com --email admin@example.com
 USAGE
@@ -50,6 +54,10 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
+    --mode)
+      MODE="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
       usage
@@ -57,6 +65,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "${MODE}" != "static" && "${MODE}" != "fastapi" ]]; then
+  echo "--mode must be 'static' or 'fastapi'"
+  exit 1
+fi
 
 if [[ -n "${DOMAIN}" && -z "${EMAIL}" ]]; then
   echo "--email is required when --domain is provided"
@@ -76,6 +89,9 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   nginx \
   ca-certificates \
   curl \
+  python3 \
+  python3-venv \
+  python3-pip \
   ufw \
   certbot \
   python3-certbot-nginx
@@ -90,18 +106,19 @@ else
   git -C "${APP_DIR}" pull --ff-only
 fi
 
-echo "==> Deploying static files"
-mkdir -p "${WEB_ROOT}"
-rsync -av --delete \
-  --exclude '.git' \
-  --exclude 'node_modules' \
-  --exclude '.github' \
-  "${APP_DIR}/" "${WEB_ROOT}/"
+if [[ "${MODE}" == "static" ]]; then
+  echo "==> Deploying static files"
+  mkdir -p "${WEB_ROOT}"
+  rsync -av --delete \
+    --exclude '.git' \
+    --exclude 'node_modules' \
+    --exclude '.github' \
+    "${APP_DIR}/" "${WEB_ROOT}/"
 
-chown -R www-data:www-data "/var/www/${APP_NAME}"
+  chown -R www-data:www-data "/var/www/${APP_NAME}"
 
-echo "==> Writing nginx site"
-cat > "${NGINX_SITE}" <<NGINX
+  echo "==> Writing nginx site (static mode)"
+  cat > "${NGINX_SITE}" <<NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -128,6 +145,52 @@ server {
     }
 }
 NGINX
+else
+  echo "==> Setting up FastAPI virtualenv"
+  python3 -m venv "${APP_DIR}/.venv"
+  "${APP_DIR}/.venv/bin/pip" install --upgrade pip
+  "${APP_DIR}/.venv/bin/pip" install fastapi uvicorn jinja2 python-multipart
+
+  echo "==> Writing systemd service for FastAPI"
+  cat > "${SYSTEMD_SERVICE}" <<SERVICE
+[Unit]
+Description=${APP_NAME} FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=${APP_DIR}
+ExecStart=${APP_DIR}/.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 9000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+  systemctl daemon-reload
+  systemctl enable "${APP_NAME}"
+  systemctl restart "${APP_NAME}"
+
+  echo "==> Writing nginx site (fastapi mode)"
+  cat > "${NGINX_SITE}" <<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN:-_};
+
+    location / {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+NGINX
+fi
 
 ln -sf "${NGINX_SITE}" "/etc/nginx/sites-enabled/${APP_NAME}"
 rm -f /etc/nginx/sites-enabled/default
@@ -146,7 +209,12 @@ fi
 
 echo "\n✅ Install complete"
 echo "App path: ${APP_DIR}"
-echo "Web root: ${WEB_ROOT}"
+echo "Mode: ${MODE}"
+if [[ "${MODE}" == "static" ]]; then
+  echo "Web root: ${WEB_ROOT}"
+else
+  echo "FastAPI upstream: http://127.0.0.1:9000"
+fi
 if [[ -n "${DOMAIN}" ]]; then
   echo "URL: https://${DOMAIN}"
 else
@@ -154,4 +222,4 @@ else
 fi
 
 echo "\nTo update later:"
-echo "  sudo ${APP_DIR}/scripts/install_ubuntu.sh --repo ${REPO_URL} --branch ${BRANCH}${DOMAIN:+ --domain ${DOMAIN} --email ${EMAIL}}"
+echo "  sudo ${APP_DIR}/scripts/install_ubuntu.sh --mode ${MODE} --repo ${REPO_URL} --branch ${BRANCH}${DOMAIN:+ --domain ${DOMAIN} --email ${EMAIL}}"
