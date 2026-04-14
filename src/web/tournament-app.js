@@ -202,6 +202,12 @@
       .filter(Boolean);
   }
 
+  function parseNonNegativeInt(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0) return 0;
+    return Math.floor(num);
+  }
+
   function recomputeSpecialStandings(tournament) {
     const scoreboard = {};
     const allMatches = [
@@ -211,19 +217,18 @@
     ];
 
     allMatches.forEach((match) => {
-      const specials = match.specials || { s180: [], finish100: [], d15: [] };
-      specials.s180.forEach((name) => {
-        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
-        scoreboard[name].s180 += 1;
-      });
-      specials.finish100.forEach((name) => {
-        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
-        scoreboard[name].finish100 += 1;
-      });
-      specials.d15.forEach((name) => {
-        scoreboard[name] = scoreboard[name] || { s180: 0, finish100: 0, d15: 0 };
-        scoreboard[name].d15 += 1;
-      });
+      const specials = match.specials || {
+        a: { s180: 0, finish100: [], d15: [] },
+        b: { s180: 0, finish100: [], d15: [] },
+      };
+      const apply = (playerName, playerSpecials) => {
+        scoreboard[playerName] = scoreboard[playerName] || { s180: 0, finish100: 0, d15: 0 };
+        scoreboard[playerName].s180 += parseNonNegativeInt(playerSpecials?.s180 || 0);
+        scoreboard[playerName].finish100 += (playerSpecials?.finish100 || []).length;
+        scoreboard[playerName].d15 += (playerSpecials?.d15 || []).length;
+      };
+      apply(match.a, specials.a);
+      apply(match.b, specials.b);
     });
 
     tournament.specialStandings = scoreboard;
@@ -1039,9 +1044,16 @@
       match.updatedBy = by;
       match.updatedAt = new Date().toISOString();
       match.specials = {
-        s180: parseSpecialEntries(el('score-180').value),
-        finish100: parseSpecialEntries(el('score-finish100').value),
-        d15: parseSpecialEntries(el('score-15darters').value),
+        a: {
+          s180: parseNonNegativeInt(el('score-a-180').value),
+          finish100: parseSpecialEntries(el('score-a-finish100').value),
+          d15: parseSpecialEntries(el('score-a-15darters').value),
+        },
+        b: {
+          s180: parseNonNegativeInt(el('score-b-180').value),
+          finish100: parseSpecialEntries(el('score-b-finish100').value),
+          d15: parseSpecialEntries(el('score-b-15darters').value),
+        },
       };
 
       t.scoreHistory.unshift({ phase, a: match.a, b: match.b, scoreA, scoreB, by, at: match.updatedAt });

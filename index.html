@@ -69,15 +69,30 @@
             <label>Your name
               <input id="score-submitter" required placeholder="Who writes this score?" />
             </label>
-            <label>180-ers (namen, komma of nieuwe regel)
-              <textarea id="score-180" rows="2" placeholder="Naam 1, Naam 2"></textarea>
-            </label>
-            <label>100+ finishes (meerdere per regel toegestaan)
-              <textarea id="score-finish100" rows="2" placeholder="Naam 1&#10;Naam 2"></textarea>
-            </label>
-            <label>&le;15 darters (meerdere per regel toegestaan)
-              <textarea id="score-15darters" rows="2" placeholder="Naam 1&#10;Naam 2"></textarea>
-            </label>
+            <div class="row">
+              <label>Speler A: 180-ers (Aantal)
+                <input id="score-a-180" type="number" min="0" value="0" />
+              </label>
+              <label>Speler B: 180-ers (Aantal)
+                <input id="score-b-180" type="number" min="0" value="0" />
+              </label>
+            </div>
+            <div class="row">
+              <label>Speler A: 100+ finishes (komma-gescheiden)
+                <input id="score-a-finish100" placeholder="120, 104" />
+              </label>
+              <label>Speler B: 100+ finishes (komma-gescheiden)
+                <input id="score-b-finish100" placeholder="101, 132" />
+              </label>
+            </div>
+            <div class="row">
+              <label>Speler A: &le;15 darter (darts komma-gescheiden)
+                <input id="score-a-15darters" placeholder="15, 14" />
+              </label>
+              <label>Speler B: &le;15 darter (darts komma-gescheiden)
+                <input id="score-b-15darters" placeholder="15, 12" />
+              </label>
+            </div>
             <button type="submit">Save score</button>
           </form>
           <p id="score-msg" class="msg"></p>
