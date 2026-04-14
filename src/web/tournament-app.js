@@ -114,6 +114,44 @@
     el('admin-list').innerHTML = admins.length
       ? admins.map((a) => `<li>${a}</li>`).join('')
       : "<li class='muted'>No admins yet for this tournament</li>";
+    renderRegistrations(t);
+  }
+
+  function ensureRegistration(tournament, name, source = 'manual') {
+    tournament.registrations = tournament.registrations || [];
+    const existing = tournament.registrations.find((r) => r.name.toLowerCase() === name.toLowerCase());
+    if (existing) return existing;
+    const row = {
+      name,
+      source,
+      present: false,
+      checkedInAt: null,
+    };
+    tournament.registrations.push(row);
+    return row;
+  }
+
+  function renderRegistrations(tournament) {
+    if (!tournament) {
+      el('registration-list').innerHTML = '';
+      el('reserve-list').innerHTML = '';
+      return;
+    }
+
+    const regs = tournament.registrations || [];
+    const regRows = regs
+      .map(
+        (r, idx) =>
+          `<li>${r.name} [${r.source}] - ${r.present ? '✅ aanwezig' : '⏳ niet gemeld'} <button type="button" class="toggle-present" data-idx="${idx}">${r.present ? 'Mark absent' : 'Mark present'}</button></li>`
+      )
+      .join('');
+    el('registration-list').innerHTML = `<h4>Check-in deelnemers</h4>${regRows ? `<ul>${regRows}</ul>` : "<p class='muted'>Nog geen voorinschrijvingen.</p>"}`;
+
+    tournament.reserves = (tournament.reserves || []).sort((a, b) => a.arrivalNo - b.arrivalNo);
+    const reserveRows = tournament.reserves
+      .map((r) => `<li>#${r.arrivalNo} - ${r.name}</li>`)
+      .join('');
+    el('reserve-list').innerHTML = `<h4>Reserve lijst (volgorde binnenkomst)</h4>${reserveRows ? `<ul>${reserveRows}</ul>` : "<p class='muted'>Geen reserves.</p>"}`;
   }
 
   function pushEvent(tournament, message) {
@@ -364,11 +402,13 @@
       return;
     }
 
-    const options = Logic.generatePouleOptions(tournament.users.length, tournament.boards, 3, 5).slice(0, 12);
+    const presentPlayers = (tournament.registrations || []).filter((r) => r.present).map((r) => r.name);
+    const eligibleCount = presentPlayers.length ? presentPlayers.length : tournament.users.length;
+    const options = Logic.generatePouleOptions(eligibleCount, tournament.boards, 3, 5).slice(0, 12);
     const maxPlayers = Logic.getMaxParticipantsForBoards(tournament.boards);
     if (!options.length) {
       el('poule-options-output').innerHTML =
-        `<p class='muted'>Geen geldige poule-indeling gevonden voor ${tournament.users.length} spelers op ${tournament.boards} borden (max ${maxPlayers}).</p>`;
+        `<p class='muted'>Geen geldige poule-indeling gevonden voor ${eligibleCount} spelers op ${tournament.boards} borden (max ${maxPlayers}).</p>`;
       return;
     }
 
@@ -376,7 +416,7 @@
       .map(
         (option) =>
           `<div class="option">
-            <p><strong>${option.pouleCount} poules</strong> — verdeling: ${option.sizes.join(', ')}</p>
+            <p><strong>${option.pouleCount} poules</strong> — verdeling: ${option.sizes.join(', ')} (${eligibleCount} spelers).</p>
             <p class="hint">${option.totalMatches} matches, ±${option.estimatedRounds} rondes, board-load ${option.boardUnits}/${tournament.boards}.</p>
             <button type="button" class="apply-poule-option" data-sizes="${option.sizes.join(',')}">Use this option</button>
           </div>`
@@ -420,11 +460,13 @@
     const uniquePlayers = new Set(t.users.map((u) => u.toLowerCase()));
     const admins = state.tournamentAdmins[t.id] || [];
     const maxPlayers = Logic.getMaxParticipantsForBoards(t.boards);
-    const availableOptions = Logic.generatePouleOptions(t.users.length, t.boards, 3, 5);
+    const presentPlayers = (t.registrations || []).filter((r) => r.present).map((r) => r.name);
+    const eligibleCount = presentPlayers.length ? presentPlayers.length : t.users.length;
+    const availableOptions = Logic.generatePouleOptions(eligibleCount, t.boards, 3, 5);
 
     const checks = [
       { ok: t.boards > 0, label: `Boards configured (${t.boards})` },
-      { ok: t.users.length <= maxPlayers, label: `Board capacity ok (${t.users.length}/${maxPlayers})` },
+      { ok: eligibleCount <= maxPlayers, label: `Board capacity ok (${eligibleCount}/${maxPlayers})` },
       { ok: availableOptions.length > 0, label: `Valid 3-5 poule layout available (${availableOptions.length})` },
       { ok: uniquePlayers.size === t.users.length, label: 'No duplicate player names' },
       { ok: admins.length > 0, label: `Tournament admins assigned (${admins.length})` },
@@ -649,12 +691,71 @@
       }
 
       if (!t.users.includes(player)) t.users.push(player);
+      ensureRegistration(t, player, 'manual');
       pushEvent(t, `Player added: ${player}`);
       el('new-player').value = '';
       renderPlayersAndAdmins();
       renderDashboard();
       renderPouleOptions(t);
       renderLifecycle(t);
+      saveState();
+    });
+
+    el('add-pre-register').addEventListener('click', () => {
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      const name = Logic.normalizePlayers(el('pre-register-player').value)[0];
+      if (!t || !name) return;
+      if (!canManageTournament(tid)) {
+        alert('Only assigned tournament admins or super admins can add pre-registrations.');
+        return;
+      }
+      if (!t.users.some((u) => u.toLowerCase() === name.toLowerCase())) t.users.push(name);
+      ensureRegistration(t, name, 'pre');
+      el('pre-register-player').value = '';
+      pushEvent(t, `Pre-registration added: ${name}`);
+      renderPlayersAndAdmins();
+      renderDashboard();
+      saveState();
+    });
+
+    el('add-reserve').addEventListener('click', () => {
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      const name = Logic.normalizePlayers(el('reserve-player').value)[0];
+      if (!t || !name) return;
+      if (!canManageTournament(tid)) {
+        alert('Only assigned tournament admins or super admins can add reserves.');
+        return;
+      }
+      t.reserves = t.reserves || [];
+      if (t.reserves.some((r) => r.name.toLowerCase() === name.toLowerCase())) return;
+      const nextNo = t.reserves.length ? Math.max(...t.reserves.map((r) => r.arrivalNo)) + 1 : 1;
+      t.reserves.push({ name, arrivalNo: nextNo });
+      el('reserve-player').value = '';
+      pushEvent(t, `Reserve added (#${nextNo}): ${name}`);
+      renderPlayersAndAdmins();
+      saveState();
+    });
+
+    el('promote-reserve').addEventListener('click', () => {
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      if (!t || !canManageTournament(tid)) return;
+      t.reserves = (t.reserves || []).sort((a, b) => a.arrivalNo - b.arrivalNo);
+      const next = t.reserves.shift();
+      if (!next) {
+        alert('Geen reserves beschikbaar.');
+        return;
+      }
+      if (!t.users.some((u) => u.toLowerCase() === next.name.toLowerCase())) t.users.push(next.name);
+      const reg = ensureRegistration(t, next.name, 'reserve');
+      reg.present = true;
+      reg.checkedInAt = new Date().toISOString();
+      pushEvent(t, `Reserve promoted: ${next.name}`);
+      renderPlayersAndAdmins();
+      renderDashboard();
+      renderPouleOptions(t);
       saveState();
     });
 
@@ -677,6 +778,7 @@
           t.users.push(p);
           existing.add(p.toLowerCase());
         }
+        ensureRegistration(t, p, 'manual');
       });
       pushEvent(t, `Bulk players added (${players.length})`);
 
@@ -685,6 +787,22 @@
       renderDashboard();
       renderPouleOptions(t);
       renderLifecycle(t);
+      saveState();
+    });
+
+    el('registration-list').addEventListener('click', (event) => {
+      const button = event.target.closest('.toggle-present');
+      if (!button) return;
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      if (!t || !canManageTournament(tid)) return;
+      const idx = Number(button.dataset.idx);
+      const row = t.registrations?.[idx];
+      if (!row) return;
+      row.present = !row.present;
+      row.checkedInAt = row.present ? new Date().toISOString() : null;
+      pushEvent(t, `Check-in ${row.present ? 'present' : 'absent'}: ${row.name}`);
+      renderPlayersAndAdmins();
       saveState();
     });
 
@@ -702,6 +820,8 @@
       if (!confirmed) return;
 
       t.users = [];
+      t.registrations = [];
+      t.reserves = [];
       t.poules = [];
       t.matches = [];
       t.ko = { winner: [], loser: [] };
@@ -803,16 +923,18 @@
         el('poule-output').innerHTML = '<p>Poule size moet tussen 3 en 5 liggen.</p>';
         return;
       }
-      const options = Logic.generatePouleOptions(t.users.length, t.boards, 3, 5);
+      const presentPlayers = (t.registrations || []).filter((r) => r.present).map((r) => r.name);
+      const eligiblePlayers = presentPlayers.length ? presentPlayers : t.users;
+      const options = Logic.generatePouleOptions(eligiblePlayers.length, t.boards, 3, 5);
       if (!options.length) {
-        el('poule-output').innerHTML = `<p>Geen geldige poule-verdeling mogelijk voor ${t.users.length} spelers op ${t.boards} borden.</p>`;
+        el('poule-output').innerHTML = `<p>Geen geldige poule-verdeling mogelijk voor ${eligiblePlayers.length} spelers op ${t.boards} borden.</p>`;
         renderPouleOptions(t);
         return;
       }
       const preferred = options.find((o) => o.pouleCount === pouleCount && o.sizes[0] === pouleSize) || options[0];
 
       const seedingMethod = el('seeding-method').value;
-      t.poules = Logic.generatePoulesBySizes(t.users, preferred.sizes, seedingMethod);
+      t.poules = Logic.generatePoulesBySizes(eligiblePlayers, preferred.sizes, seedingMethod);
 
       t.matches = t.poules.flatMap((p) => Logic.generateRoundRobin(p.players, t.boards, t.boardNames, p.name));
       t.matches = t.matches.map((m) => ({ ...m, status: 'pending', round: 1 }));

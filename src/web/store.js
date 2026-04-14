@@ -14,6 +14,8 @@
         boards: 4,
         boardNames: ['Board 1', 'Board 2', 'Board 3', 'Board 4'],
         users: ['Ana', 'Bram', 'Cem', 'Daan', 'Eli', 'Fay', 'Gus', 'Hugo'],
+        registrations: [],
+        reserves: [],
         poules: [],
         matches: [],
         ko: { winner: [], loser: [] },
@@ -35,6 +37,8 @@
           ? t.boardNames
           : Array.from({ length: t.boards || 4 }, (_, i) => `Board ${i + 1}`),
       users: t.users || [],
+      registrations: t.registrations || [],
+      reserves: t.reserves || [],
       poules: t.poules || [],
       matches: t.matches || [],
       ko: t.ko || { winner: [], loser: [] },

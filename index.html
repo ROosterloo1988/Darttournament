@@ -163,11 +163,22 @@
             <button id="add-player" type="button">Add player</button>
             <button id="reset-users" type="button">Reset users for tournament</button>
           </div>
+          <div class="row">
+            <input id="pre-register-player" placeholder="Voorinschrijving toevoegen" />
+            <button id="add-pre-register" type="button">Add pre-registration</button>
+          </div>
+          <div class="row">
+            <input id="reserve-player" placeholder="Reserve toevoegen" />
+            <button id="add-reserve" type="button">Add reserve</button>
+            <button id="promote-reserve" type="button">Promote next reserve</button>
+          </div>
           <label>Bulk add players (one per line or comma separated)
             <textarea id="bulk-players" rows="4" placeholder="Player 1&#10;Player 2&#10;Player 3"></textarea>
           </label>
           <button id="bulk-add-players" type="button">Bulk add players</button>
           <ul id="player-list"></ul>
+          <div id="registration-list"></div>
+          <div id="reserve-list"></div>
         </div>
 
         <div class="card admin-protected">

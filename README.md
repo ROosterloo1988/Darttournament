@@ -29,6 +29,8 @@ Starter PWA for running dart tournaments with:
 - Ingevoerde wedstrijden zijn vergrendeld (geen overschrijven van score)
 - Bijzondere scores worden per wedstrijd **per speler (A/B)** ingevoerd
 - KO kan gestart worden zodra minimaal 1 poule klaar is (met lucky-loser aanvulling voor winner-ronde)
+- Voorinschrijving + check-in aanwezig bij wedstrijdtafel
+- Reserve lijst op volgorde van binnenkomst met promotie naar deelnemers
 
 ## Run locally
 
