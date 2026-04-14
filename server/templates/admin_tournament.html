@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Admin: {{ tournament.name }}</h1>
+<div class="hamburger-wrap">
+  <button id="admin-menu-btn">☰</button>
+  <div id="admin-menu" class="menu hidden">
+    <a href="#inschrijvingen">Inschrijvingen</a>
+    <a href="#setup">Toernooi Setup</a>
+    <a href="#poules">Poules</a>
+    <a href="#knockout">Knock-out</a>
+    <a href="#voortgang">Voortgang toernooi</a>
+  </div>
+</div>
+
+<section id="inschrijvingen">
+  <h2>Inschrijvingen</h2>
+  <p>Beheer aanwezig/afwezig, reserve-lijst en naamwijzigingen.</p>
+</section>
+<section id="setup">
+  <h2>Toernooi Setup</h2>
+  <label>Max deelnemers <input value="{{ tournament.max_participants }}"></label>
+  <label>Baan aantal <input value="{{ tournament.boards|length }}"></label>
+  <button>Generate Poules</button>
+  <button>Generate Knock-out</button>
+</section>
+<section id="poules"><h2>Poules</h2></section>
+<section id="knockout"><h2>Knock-out</h2></section>
+<section id="voortgang">
+  <h2>Voortgang toernooi</h2>
+  <p>{{ progress_done }} / {{ progress_total }} matches afgerond</p>
+</section>
+<script src="/static/admin.js"></script>
+{% endblock %}

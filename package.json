@@ -1,0 +1,9 @@
+{
+  "name": "darttournament-pwa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Static PWA for darts tournaments",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

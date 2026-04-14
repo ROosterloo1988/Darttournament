@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Vandaag geplande toernooien</h1>
+<ul>
+  {% for t in today_tournaments %}
+    <li><a href="/tournament/{{ t.id }}/scores">{{ t.name }}</a></li>
+  {% else %}
+    <li>Geen toernooien voor vandaag.</li>
+  {% endfor %}
+</ul>
+
+<h2>Afgesloten toernooien</h2>
+<ul>
+  {% for t in finished_tournaments %}
+    <li><a href="/tournament/{{ t.id }}/scores">{{ t.name }}</a></li>
+  {% else %}
+    <li>Geen afgesloten toernooien.</li>
+  {% endfor %}
+</ul>
+{% endblock %}
