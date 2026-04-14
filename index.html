@@ -209,6 +209,14 @@
         <div class="card admin-protected">
           <h2>Knockout generator (winner + loser)</h2>
           <p id="ko-gate-msg" class="hint"></p>
+          <div class="row">
+            <label>Doel aantal spelers winner-ronde
+              <input id="ko-winner-target" type="number" min="2" step="2" value="8" />
+            </label>
+            <label>Lucky losers voor winner-ronde (komma-gescheiden)
+              <input id="ko-lucky-losers" placeholder="Naam 1, Naam 2" />
+            </label>
+          </div>
           <button id="generate-ko" type="button">Generate KO from poules</button>
           <button id="generate-ko-ranked" type="button">Generate KO from standings</button>
           <div class="row">

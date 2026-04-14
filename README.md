@@ -28,6 +28,7 @@ Starter PWA for running dart tournaments with:
 - Score invoer per bord + bijzondere scores (180, 100+ finishes, ≤15 darters) met stand
 - Ingevoerde wedstrijden zijn vergrendeld (geen overschrijven van score)
 - Bijzondere scores worden per wedstrijd **per speler (A/B)** ingevoerd
+- KO kan gestart worden zodra minimaal 1 poule klaar is (met lucky-loser aanvulling voor winner-ronde)
 
 ## Run locally
 

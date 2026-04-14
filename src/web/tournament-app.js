@@ -157,12 +157,13 @@
 
   function renderKOButtons(t) {
     const completion = Logic.getPouleCompletion(t?.matches || []);
+    const completedPoules = getCompletedPouleNames(t || { poules: [], matches: [] }).length;
     const status = t?.status || 'draft';
-    const enabled = status === 'poules_closed' && completion.isComplete;
+    const enabled = ['poules_running', 'poules_closed', 'ko_running'].includes(status) && completedPoules > 0;
     el('generate-ko').disabled = !enabled;
     el('generate-ko-ranked').disabled = !enabled;
     el('ko-gate-msg').textContent = enabled
-      ? 'KO ontgrendeld: poules gesloten en compleet.'
+      ? `KO ontgrendeld: ${completedPoules} poule(s) klaar, je kunt nu alvast sheets maken.`
       : `KO vergrendeld. Status: ${status}. Poules klaar: ${completion.done}/${completion.total}.`;
   }
 
@@ -285,6 +286,21 @@
     return Logic.calculatePouleStandings(t.poules, t.matches);
   }
 
+  function getCompletedPouleNames(tournament) {
+    return (tournament.poules || [])
+      .filter((poule) => {
+        const matches = tournament.matches.filter((m) => m.poule === poule.name);
+        return matches.length > 0 && matches.every((m) => m.scoreA != null && m.scoreB != null);
+      })
+      .map((p) => p.name);
+  }
+
+  function calculateCompletedStandings(tournament) {
+    const completed = new Set(getCompletedPouleNames(tournament));
+    const standings = calculateStandings(tournament);
+    return standings.filter((group) => completed.has(group.poule));
+  }
+
   function renderStandings(t) {
     const standings = calculateStandings(t);
     const html = standings
@@ -314,6 +330,13 @@
         : "<p class='muted'>No matches generated yet.</p>");
 
     el('ko-output').innerHTML = draw('Winner bracket', tournament.ko.winner) + draw('Loser bracket', tournament.ko.loser);
+  }
+
+  function parseLuckyLosers(raw) {
+    return String(raw || '')
+      .split(/[\n,;]+/g)
+      .map((v) => v.trim())
+      .filter(Boolean);
   }
 
   function renderPace() {
@@ -895,13 +918,13 @@
 
       const t = getTournamentById(tid);
       if (!t || t.poules.length === 0) return;
-      const completion = Logic.getPouleCompletion(t.matches);
-      if ((t.status || 'draft') !== 'poules_closed' || !completion.isComplete) {
-        alert(`KO is locked. Close poules first (${completion.done}/${completion.total}).`);
+      const completedPoules = getCompletedPouleNames(t);
+      if (!completedPoules.length) {
+        alert('KO generation needs at least one completed poule.');
         return;
       }
 
-      const ranked = t.poules.flatMap((p) => p.players);
+      const ranked = t.poules.filter((p) => completedPoules.includes(p.name)).flatMap((p) => p.players);
       const mid = Math.ceil(ranked.length / 2);
       t.ko.winner = Logic.buildKOMatchesFromPlayers(ranked.slice(0, mid), t.boards, t.boardNames, 0);
       t.ko.loser = Logic.buildKOMatchesFromPlayers(ranked.slice(mid), t.boards, t.boardNames, 2);
@@ -923,17 +946,31 @@
 
       const t = getTournamentById(tid);
       if (!t || t.poules.length === 0) return;
-      const completion = Logic.getPouleCompletion(t.matches);
-      if ((t.status || 'draft') !== 'poules_closed' || !completion.isComplete) {
-        alert(`KO is locked. Close poules first (${completion.done}/${completion.total}).`);
+      const completedStandings = calculateCompletedStandings(t);
+      if (!completedStandings.length) {
+        alert('Nog geen complete poules. Rond eerst minimaal 1 poule af.');
         return;
       }
 
-      const standings = calculateStandings(t);
-      const ko = Logic.generateKOfromStandings(standings, t.boards, t.boardNames);
-      t.ko.winner = ko.winner;
-      t.ko.loser = ko.loser;
+      const ko = Logic.generateKOfromStandings(completedStandings, t.boards, t.boardNames);
+      const winnerPlayers = ko.winner.flatMap((m) => [m.a, m.b]).filter((n) => n && n !== 'TBD');
+      const loserPlayers = ko.loser.flatMap((m) => [m.a, m.b]).filter((n) => n && n !== 'TBD');
+
+      const targetWinners = Math.max(2, Number(el('ko-winner-target').value) || winnerPlayers.length);
+      const luckyLosers = parseLuckyLosers(el('ko-lucky-losers').value);
+      const loserPool = new Set(loserPlayers);
+      const validLucky = luckyLosers.filter((name) => loserPool.has(name) && !winnerPlayers.includes(name));
+      const needed = Math.max(0, targetWinners - winnerPlayers.length);
+      const promoted = validLucky.slice(0, needed);
+      const finalWinners = [...winnerPlayers, ...promoted];
+      const remainingLosers = loserPlayers.filter((name) => !promoted.includes(name));
+
+      t.ko.winner = Logic.buildKOMatchesFromPlayers(finalWinners, t.boards, t.boardNames, 0);
+      t.ko.loser = Logic.buildKOMatchesFromPlayers(remainingLosers, t.boards, t.boardNames, 2);
       pushEvent(t, 'KO generated from standings');
+      if (promoted.length) {
+        pushEvent(t, `Lucky losers promoted to winner bracket: ${promoted.join(', ')}`);
+      }
       renderKoOutput(t);
       renderScoreMatches();
       renderScoreBoards();
