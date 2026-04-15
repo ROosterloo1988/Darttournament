@@ -12,6 +12,14 @@ EMAIL=""
 BRANCH="main"
 MODE="static" # static | fastapi
 
+# Prefer current repo remote if script is run from a git checkout.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  CURRENT_REMOTE="$(git config --get remote.origin.url || true)"
+  if [[ -n "${CURRENT_REMOTE}" ]]; then
+    REPO_URL="${CURRENT_REMOTE}"
+  fi
+fi
+
 usage() {
   cat <<USAGE
 Usage: sudo ./scripts/install_ubuntu.sh [options]
@@ -147,6 +155,12 @@ server {
 NGINX
 else
   echo "==> Setting up FastAPI virtualenv"
+  if [[ ! -f "${APP_DIR}/server/main.py" ]]; then
+    echo "FastAPI mode requested but ${APP_DIR}/server/main.py was not found."
+    echo "Tip: use --repo with the Tournament Manager repository."
+    exit 1
+  fi
+
   python3 -m venv "${APP_DIR}/.venv"
   "${APP_DIR}/.venv/bin/pip" install --upgrade pip
   "${APP_DIR}/.venv/bin/pip" install fastapi uvicorn jinja2 python-multipart
@@ -173,6 +187,12 @@ SERVICE
   systemctl daemon-reload
   systemctl enable "${APP_NAME}"
   systemctl restart "${APP_NAME}"
+  sleep 2
+  if ! systemctl is-active --quiet "${APP_NAME}"; then
+    echo "FastAPI service failed to start. Last logs:"
+    journalctl -u "${APP_NAME}" -n 40 --no-pager || true
+    exit 1
+  fi
 
   echo "==> Writing nginx site (fastapi mode)"
   cat > "${NGINX_SITE}" <<NGINX
@@ -198,6 +218,14 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl enable nginx
 systemctl restart nginx
+if [[ "${MODE}" == "fastapi" ]]; then
+  sleep 1
+  if ! curl -fsS "http://127.0.0.1:9000/" >/dev/null; then
+    echo "Warning: FastAPI upstream on 127.0.0.1:9000 is not healthy."
+    echo "Check: systemctl status ${APP_NAME} && journalctl -u ${APP_NAME} -n 100 --no-pager"
+    exit 1
+  fi
+fi
 
 echo "==> Opening firewall for web"
 ufw allow 'Nginx Full' || true

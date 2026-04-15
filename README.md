@@ -81,6 +81,13 @@ For FastAPI + Jinja2 mode behind nginx:
 sudo ./scripts/install_ubuntu.sh --mode fastapi
 ```
 
+If nginx shows `502 Bad Gateway`, verify the FastAPI service:
+
+```bash
+sudo systemctl status darttournament
+sudo journalctl -u darttournament -n 100 --no-pager
+```
+
 With custom repo/branch:
 
 ```bash
