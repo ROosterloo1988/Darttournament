@@ -88,6 +88,12 @@ sudo systemctl status darttournament
 sudo journalctl -u darttournament -n 100 --no-pager
 ```
 
+If logs show `No module named itsdangerous`, rerun installer in fastapi mode so missing Python deps are installed:
+
+```bash
+sudo ./scripts/install_ubuntu.sh --mode fastapi
+```
+
 With custom repo/branch:
 
 ```bash

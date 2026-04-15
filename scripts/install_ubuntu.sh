@@ -163,7 +163,7 @@ else
 
   python3 -m venv "${APP_DIR}/.venv"
   "${APP_DIR}/.venv/bin/pip" install --upgrade pip
-  "${APP_DIR}/.venv/bin/pip" install fastapi uvicorn jinja2 python-multipart
+  "${APP_DIR}/.venv/bin/pip" install fastapi uvicorn jinja2 python-multipart itsdangerous
 
   echo "==> Writing systemd service for FastAPI"
   cat > "${SYSTEMD_SERVICE}" <<SERVICE
