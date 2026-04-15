@@ -110,8 +110,8 @@ test('generatePouleOptions includes full-usage option when possible', () => {
   assert.equal(options.length, 0);
 });
 
-test('generatePouleOptions returns full allocation with 3-5 sizes', () => {
-  const options = generatePouleOptions(16, 4, 3, 5);
+test('generatePouleOptions returns full allocation with 3-6 sizes', () => {
+  const options = generatePouleOptions(16, 4, 3, 6);
   assert.ok(options.some((o) => o.sizes.reduce((s, n) => s + n, 0) === 16 && o.usesAllPlayers));
 });
 

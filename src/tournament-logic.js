@@ -228,7 +228,7 @@
 
   function boardUnitsForPouleSize(size) {
     if (size === 3) return 0.5; // 2 poules of 3 on 1 board
-    if (size === 4 || size === 5) return 1; // 1 poule of 4/5 on 1 board
+    if (size === 4 || size === 5 || size === 6) return 1; // 1 poule of 4/5/6 on 1 board
     return Number.POSITIVE_INFINITY;
   }
 
@@ -236,45 +236,56 @@
     return Math.max(boards, 0) * 6;
   }
 
-  function generatePouleOptions(playerCount, boards, minSize = 3, maxSize = 5) {
-    if (!playerCount || !boards || minSize !== 3 || maxSize !== 5) return [];
+  function generatePouleOptions(playerCount, boards, minSize = 3, maxSize = 6) {
+    if (!playerCount || !boards || minSize !== 3 || maxSize !== 6) return [];
     if (playerCount > getMaxParticipantsForBoards(boards)) return [];
 
     const options = [];
     const max3 = Math.floor(playerCount / 3);
     const max4 = Math.floor(playerCount / 4);
     const max5 = Math.floor(playerCount / 5);
+    const max6 = Math.floor(playerCount / 6);
 
     for (let c3 = 0; c3 <= max3; c3 += 1) {
       for (let c4 = 0; c4 <= max4; c4 += 1) {
         for (let c5 = 0; c5 <= max5; c5 += 1) {
-          const usedPlayers = c3 * 3 + c4 * 4 + c5 * 5;
-          if (usedPlayers !== playerCount) continue;
-          const boardUnits = c3 * boardUnitsForPouleSize(3) + c4 * boardUnitsForPouleSize(4) + c5 * boardUnitsForPouleSize(5);
-          if (boardUnits > boards) continue;
+          for (let c6 = 0; c6 <= max6; c6 += 1) {
+            const usedPlayers = c3 * 3 + c4 * 4 + c5 * 5 + c6 * 6;
+            if (usedPlayers !== playerCount) continue;
+            const boardUnits =
+              c3 * boardUnitsForPouleSize(3) +
+              c4 * boardUnitsForPouleSize(4) +
+              c5 * boardUnitsForPouleSize(5) +
+              c6 * boardUnitsForPouleSize(6);
+            if (boardUnits > boards) continue;
 
-          const sizes = [
-            ...Array.from({ length: c5 }, () => 5),
-            ...Array.from({ length: c4 }, () => 4),
-            ...Array.from({ length: c3 }, () => 3),
-          ];
-          const totalMatches = sizes.reduce((sum, size) => sum + (size * (size - 1)) / 2, 0);
-          options.push({
-            sizes,
-            pouleCount: sizes.length,
-            usedPlayers,
-            leftoverPlayers: 0,
-            totalMatches,
-            estimatedRounds: Math.ceil(totalMatches / boards),
-            boardUnits,
-            usesAllPlayers: true,
-          });
+            const sizes = [
+              ...Array.from({ length: c6 }, () => 6),
+              ...Array.from({ length: c5 }, () => 5),
+              ...Array.from({ length: c4 }, () => 4),
+              ...Array.from({ length: c3 }, () => 3),
+            ];
+            const totalMatches = sizes.reduce((sum, size) => sum + (size * (size - 1)) / 2, 0);
+            options.push({
+              sizes,
+              pouleCount: sizes.length,
+              usedPlayers,
+              leftoverPlayers: 0,
+              totalMatches,
+              estimatedRounds: Math.ceil(totalMatches / boards),
+              boardUnits,
+              usesAllPlayers: true,
+            });
+          }
         }
       }
     }
 
     return options.sort((a, b) => {
       if (a.estimatedRounds !== b.estimatedRounds) return a.estimatedRounds - b.estimatedRounds;
+      const aSmall3 = a.sizes.filter((s) => s === 3).length;
+      const bSmall3 = b.sizes.filter((s) => s === 3).length;
+      if (aSmall3 !== bSmall3) return aSmall3 - bSmall3;
       if (a.pouleCount !== b.pouleCount) return a.pouleCount - b.pouleCount;
       return b.sizes.join(',').localeCompare(a.sizes.join(','));
     });
@@ -320,9 +331,9 @@
   }
 
   function generatePoulesForAllPlayers(players, boards, method = 'snake') {
-    const options = generatePouleOptions(players.length, boards, 3, 5);
+    const options = generatePouleOptions(players.length, boards, 3, 6);
     if (!options.length) {
-      throw new Error('No valid poule layout for all players with current board count (sizes must be 3-5).');
+      throw new Error('No valid poule layout for all players with current board count (sizes must be 3-6).');
     }
     return {
       option: options[0],

@@ -404,7 +404,7 @@
 
     const presentPlayers = (tournament.registrations || []).filter((r) => r.present).map((r) => r.name);
     const eligibleCount = presentPlayers.length ? presentPlayers.length : tournament.users.length;
-    const options = Logic.generatePouleOptions(eligibleCount, tournament.boards, 3, 5).slice(0, 12);
+    const options = Logic.generatePouleOptions(eligibleCount, tournament.boards, 3, 6).slice(0, 12);
     const maxPlayers = Logic.getMaxParticipantsForBoards(tournament.boards);
     if (!options.length) {
       el('poule-options-output').innerHTML =
@@ -462,15 +462,15 @@
     const maxPlayers = Logic.getMaxParticipantsForBoards(t.boards);
     const presentPlayers = (t.registrations || []).filter((r) => r.present).map((r) => r.name);
     const eligibleCount = presentPlayers.length ? presentPlayers.length : t.users.length;
-    const availableOptions = Logic.generatePouleOptions(eligibleCount, t.boards, 3, 5);
+    const availableOptions = Logic.generatePouleOptions(eligibleCount, t.boards, 3, 6);
 
     const checks = [
       { ok: t.boards > 0, label: `Boards configured (${t.boards})` },
       { ok: eligibleCount <= maxPlayers, label: `Board capacity ok (${eligibleCount}/${maxPlayers})` },
-      { ok: availableOptions.length > 0, label: `Valid 3-5 poule layout available (${availableOptions.length})` },
+      { ok: availableOptions.length > 0, label: `Valid 3-6 poule layout available (${availableOptions.length})` },
       { ok: uniquePlayers.size === t.users.length, label: 'No duplicate player names' },
       { ok: admins.length > 0, label: `Tournament admins assigned (${admins.length})` },
-      { ok: pouleSize >= 3 && pouleSize <= 5, label: `Valid preferred poule size (${pouleSize})` },
+      { ok: pouleSize >= 3 && pouleSize <= 6, label: `Valid preferred poule size (${pouleSize})` },
     ];
 
     return { checks, valid: checks.every((c) => c.ok), pouleCount, pouleSize };
@@ -919,13 +919,13 @@
 
       const pouleCount = Number(el('poule-count').value);
       const pouleSize = Number(el('poule-size').value);
-      if (pouleSize < 3 || pouleSize > 5) {
-        el('poule-output').innerHTML = '<p>Poule size moet tussen 3 en 5 liggen.</p>';
+      if (pouleSize < 3 || pouleSize > 6) {
+        el('poule-output').innerHTML = '<p>Poule size moet tussen 3 en 6 liggen.</p>';
         return;
       }
       const presentPlayers = (t.registrations || []).filter((r) => r.present).map((r) => r.name);
       const eligiblePlayers = presentPlayers.length ? presentPlayers : t.users;
-      const options = Logic.generatePouleOptions(eligiblePlayers.length, t.boards, 3, 5);
+      const options = Logic.generatePouleOptions(eligiblePlayers.length, t.boards, 3, 6);
       if (!options.length) {
         el('poule-output').innerHTML = `<p>Geen geldige poule-verdeling mogelijk voor ${eligiblePlayers.length} spelers op ${t.boards} borden.</p>`;
         renderPouleOptions(t);

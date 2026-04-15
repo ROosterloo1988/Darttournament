@@ -29,16 +29,16 @@ TOURNAMENTS = {
         "max_participants": 24,
         "poules": {
             "A": [
-                {"id": "A-1", "board": 1, "a": "Ana", "b": "Bram", "score_a": None, "score_b": None},
-                {"id": "A-2", "board": 1, "a": "Cem", "b": "Daan", "score_a": None, "score_b": None},
+                {"id": "A-1", "board": 1, "a": "Ana", "b": "Bram", "score_a": None, "score_b": None, "legs_a": None, "legs_b": None, "specials": {}},
+                {"id": "A-2", "board": 1, "a": "Cem", "b": "Daan", "score_a": None, "score_b": None, "legs_a": None, "legs_b": None, "specials": {}},
             ],
             "B": [
-                {"id": "B-1", "board": 2, "a": "Ana", "b": "Cem", "score_a": None, "score_b": None},
+                {"id": "B-1", "board": 2, "a": "Ana", "b": "Cem", "score_a": None, "score_b": None, "legs_a": None, "legs_b": None, "specials": {}},
             ],
         },
         "knockout": [
-            {"id": "K-1", "board": 1, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None},
-            {"id": "K-2", "board": 2, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None},
+            {"id": "K-1", "board": 1, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None, "legs_a": None, "legs_b": None, "specials": {}},
+            {"id": "K-2", "board": 2, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None, "legs_a": None, "legs_b": None, "specials": {}},
         ],
     },
     2: {
@@ -66,7 +66,7 @@ def current_user(request: Request):
 def require_login(request: Request):
     user = current_user(request)
     if not user:
-        raise HTTPException(status_code=401, detail="Login required")
+        return None
     return user
 
 
@@ -108,6 +108,9 @@ def save_score(tid: int, payload: dict):
     phase = payload.get("phase")
     score_a = payload.get("score_a")
     score_b = payload.get("score_b")
+    legs_a = payload.get("legs_a")
+    legs_b = payload.get("legs_b")
+    specials = payload.get("specials") or {}
 
     target = None
     if phase == "poule":
@@ -127,6 +130,9 @@ def save_score(tid: int, payload: dict):
 
     target["score_a"] = score_a
     target["score_b"] = score_b
+    target["legs_a"] = legs_a
+    target["legs_b"] = legs_b
+    target["specials"] = specials
     return JSONResponse({"ok": True, "match": target})
 
 
@@ -160,6 +166,8 @@ def admin_logout(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 def admin_home(request: Request):
     user = require_login(request)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=303)
     own_tournaments = [t for t in TOURNAMENTS.values() if user in t.get("admins", [])]
     return templates.TemplateResponse(
         request=request,
@@ -171,6 +179,8 @@ def admin_home(request: Request):
 @app.get("/admin/tournament/{tid}", response_class=HTMLResponse)
 def admin_tournament(request: Request, tid: int):
     user = require_login(request)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=303)
     t = TOURNAMENTS.get(tid)
     if not t or user not in t.get("admins", []):
         raise HTTPException(403, "No access")

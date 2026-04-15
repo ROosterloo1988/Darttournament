@@ -8,5 +8,6 @@ main{padding:16px;max-width:1000px;margin:auto}
 .accordion-head{padding:10px;cursor:pointer;font-weight:700}
 .accordion-body{display:none;padding:10px;border-top:1px solid #e2e8f0}
 .accordion-item.open .accordion-body{display:block}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:6px 0}
 .floating{position:fixed;right:24px;bottom:24px;background:#22c55e;color:#fff;border:0;border-radius:999px;padding:14px 20px;font-size:16px}
 .error{color:#b91c1c}
