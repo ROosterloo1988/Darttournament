@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="hamburger-wrap">
+  <button id="menu-btn">☰</button>
+  <div id="public-menu" class="menu hidden">
+    <a href="#standen">Standen</a>
+    <a href="#bijzondere">Bijzondere scores</a>
+    <a href="#ko">Knockout schema</a>
+    <a href="/admin">Admin pagina</a>
+  </div>
+</div>
+
+<h1>{{ tournament.name }} - Score invoer</h1>
+
+<section>
+  <h2>Poules</h2>
+  <label>Kies poule
+    <select id="poule-select">
+      {% for pname, matches in tournament.poules.items() %}
+        <option value="{{ pname }}">Poule {{ pname }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div id="poule-accordion"></div>
+</section>
+
+<section id="ko">
+  <h2>Knock-out</h2>
+  <label>Kies baan
+    <select id="board-select">
+      {% for b in tournament.boards %}
+        <option value="{{ b }}">Baan {{ b }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div id="ko-accordion"></div>
+</section>
+
+<button id="save-floating" class="floating hidden">Opslaan</button>
+
+<script>
+  window.T_DATA = {{ tournament | tojson }};
+  window.T_ID = {{ tournament.id }};
+</script>
+<script src="/static/score_entry.js"></script>
+{% endblock %}
