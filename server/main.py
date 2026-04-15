@@ -76,8 +76,9 @@ def home(request: Request):
     today_tournaments = [t for t in TOURNAMENTS.values() if t["planned_date"] == today and t["status"] != "finished"]
     finished_tournaments = [t for t in TOURNAMENTS.values() if t["status"] == "finished"]
     return templates.TemplateResponse(
-        "home.html",
-        {
+        request=request,
+        name="home.html",
+        context={
             "request": request,
             "today_tournaments": today_tournaments,
             "finished_tournaments": finished_tournaments,
@@ -90,7 +91,11 @@ def score_entry(request: Request, tid: int):
     t = TOURNAMENTS.get(tid)
     if not t:
         raise HTTPException(404, "Tournament not found")
-    return templates.TemplateResponse("score_entry.html", {"request": request, "tournament": t})
+    return templates.TemplateResponse(
+        request=request,
+        name="score_entry.html",
+        context={"request": request, "tournament": t},
+    )
 
 
 @app.post("/api/tournament/{tid}/score")
@@ -127,13 +132,21 @@ def save_score(tid: int, payload: dict):
 
 @app.get("/admin/login", response_class=HTMLResponse)
 def admin_login_page(request: Request):
-    return templates.TemplateResponse("admin_login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_login.html",
+        context={"request": request, "error": None},
+    )
 
 
 @app.post("/admin/login", response_class=HTMLResponse)
 def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
     if USERS.get(username) != password:
-        return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Onjuiste inlog"})
+        return templates.TemplateResponse(
+            request=request,
+            name="admin_login.html",
+            context={"request": request, "error": "Onjuiste inlog"},
+        )
     request.session["user"] = username
     return RedirectResponse("/admin", status_code=303)
 
@@ -148,7 +161,11 @@ def admin_logout(request: Request):
 def admin_home(request: Request):
     user = require_login(request)
     own_tournaments = [t for t in TOURNAMENTS.values() if user in t.get("admins", [])]
-    return templates.TemplateResponse("admin_home.html", {"request": request, "user": user, "tournaments": own_tournaments})
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_home.html",
+        context={"request": request, "user": user, "tournaments": own_tournaments},
+    )
 
 
 @app.get("/admin/tournament/{tid}", response_class=HTMLResponse)
@@ -166,6 +183,13 @@ def admin_tournament(request: Request, tid: int):
     ) + sum(1 for m in t["knockout"] if m["score_a"] is not None and m["score_b"] is not None)
 
     return templates.TemplateResponse(
-        "admin_tournament.html",
-        {"request": request, "user": user, "tournament": t, "progress_total": progress_total, "progress_done": progress_done},
+        request=request,
+        name="admin_tournament.html",
+        context={
+            "request": request,
+            "user": user,
+            "tournament": t,
+            "progress_total": progress_total,
+            "progress_done": progress_done,
+        },
     )
