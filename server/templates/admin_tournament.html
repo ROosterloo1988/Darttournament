@@ -4,28 +4,47 @@
 <div class="hamburger-wrap">
   <button id="admin-menu-btn">☰</button>
   <div id="admin-menu" class="menu hidden">
-    <a href="#inschrijvingen">Inschrijvingen</a>
     <a href="#setup">Toernooi Setup</a>
+    <a href="#inschrijvingen">Inschrijvingen</a>
     <a href="#poules">Poules</a>
     <a href="#knockout">Knock-out</a>
     <a href="#voortgang">Voortgang toernooi</a>
   </div>
 </div>
 
+<section id="setup">
+  <h2>Toernooi Setup (stap 1)</h2>
+  <form method="post" action="/admin/tournament/{{ tournament.id }}/setup">
+    <label>Max deelnemers
+      <input name="max_participants" type="number" min="1" value="{{ tournament.max_participants }}" required>
+    </label>
+    <label>Baan aantal
+      <input name="board_count" type="number" min="1" value="{{ tournament.boards|length }}" required>
+    </label>
+    <button type="submit">Setup opslaan</button>
+  </form>
+  <p>Bij toevoegen: zolang max deelnemers niet bereikt is gaat speler naar spelerslijst, daarna naar reservelijst.</p>
+</section>
+
 <section id="inschrijvingen">
   <h2>Inschrijvingen</h2>
   <p>Beheer aanwezig/afwezig, reserve-lijst en naamwijzigingen.</p>
+  <p><strong>Aanwezig:</strong> <span id="present-counter">{{ tournament.present_count }}</span> / <span id="player-total">{{ tournament.players|length }}</span></p>
   <form method="post" action="/admin/tournament/{{ tournament.id }}/players/add">
     <label>Speler toevoegen <input name="player_name" required></label>
     <button type="submit">Toevoegen</button>
   </form>
-  <ul>
+  <ol>
     {% for p in tournament.players %}
     <li>
-      {{ p.name }} — {{ 'aanwezig' if p.present else 'afwezig' }}
-      <form method="post" action="/admin/tournament/{{ tournament.id }}/players/toggle" style="display:inline">
+      <strong>{{ loop.index }}.</strong> {{ p.name }}
+      <form method="post" action="/admin/tournament/{{ tournament.id }}/players/toggle" style="display:inline" class="toggle-form">
         <input type="hidden" name="player_name" value="{{ p.name }}">
-        <button type="submit">{{ 'Zet afwezig' if p.present else 'Zet aanwezig' }}</button>
+        <label class="switch">
+          <input type="checkbox" {% if p.present %}checked{% endif %} data-toggle-present data-player="{{ p.name }}">
+          <span class="slider"></span>
+        </label>
+        <span class="present-label">{% if p.present %}aanwezig{% else %}afwezig{% endif %}</span>
       </form>
       <form method="post" action="/admin/tournament/{{ tournament.id }}/players/rename" style="display:inline">
         <input type="hidden" name="old_name" value="{{ p.name }}">
@@ -36,7 +55,7 @@
     {% else %}
     <li>Geen spelers.</li>
     {% endfor %}
-  </ul>
+  </ol>
 
   <h3>Reservelijst</h3>
   <form method="post" action="/admin/tournament/{{ tournament.id }}/reserves/add">
@@ -48,18 +67,11 @@
   </form>
   <ul>
     {% for r in tournament.reserves %}
-    <li>{{ r }}</li>
+    <li>{{ loop.index }}. {{ r }}</li>
     {% else %}
     <li>Geen reserves.</li>
     {% endfor %}
   </ul>
-</section>
-<section id="setup">
-  <h2>Toernooi Setup</h2>
-  <label>Max deelnemers <input value="{{ tournament.max_participants }}"></label>
-  <label>Baan aantal <input value="{{ tournament.boards|length }}"></label>
-  <button>Generate Poules</button>
-  <button>Generate Knock-out</button>
 </section>
 <section id="poules"><h2>Poules</h2></section>
 <section id="knockout"><h2>Knock-out</h2></section>

@@ -13,7 +13,7 @@ app.add_middleware(SessionMiddleware, secret_key="change-me")
 app.mount("/static", StaticFiles(directory="server/static"), name="static")
 templates = Jinja2Templates(directory="server/templates")
 
-DB_PATH = Path("server/data.db")
+DB_PATH = Path(__file__).resolve().parent / "data.db"
 
 
 def get_conn():
@@ -70,19 +70,6 @@ def init_db():
 
         has_tournaments = conn.execute("SELECT COUNT(*) AS c FROM tournaments").fetchone()["c"]
         if has_tournaments == 0:
-            sample_poules = {
-                "A": [
-                    {"id": "A-1", "board": 1, "a": "Ana", "b": "Bram", "score_a": None, "score_b": None, "specials": {}},
-                    {"id": "A-2", "board": 1, "a": "Cem", "b": "Daan", "score_a": None, "score_b": None, "specials": {}},
-                ],
-                "B": [
-                    {"id": "B-1", "board": 2, "a": "Ana", "b": "Cem", "score_a": None, "score_b": None, "specials": {}},
-                ],
-            }
-            sample_knockout = [
-                {"id": "K-1", "board": 1, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None, "specials": {}},
-                {"id": "K-2", "board": 2, "a": "TBD", "b": "TBD", "score_a": None, "score_b": None, "specials": {}},
-            ]
             conn.execute(
                 """
                 INSERT INTO tournaments(name, planned_date, status, max_participants, boards_json, poules_json, knockout_json)
@@ -94,8 +81,8 @@ def init_db():
                     "planned",
                     24,
                     json.dumps([1, 2, 3]),
-                    json.dumps(sample_poules),
-                    json.dumps(sample_knockout),
+                    json.dumps({}),
+                    json.dumps([]),
                 ),
             )
             tid = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
@@ -126,6 +113,25 @@ def init_db():
             )
             tid2 = conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
             conn.execute("INSERT INTO tournament_admins(tournament_id, username) VALUES(?, ?)", (tid2, "bob"))
+        else:
+            # Legacy demo cleanup: remove prefilled matches from Open Tuesday if nothing has been played yet.
+            rows = conn.execute(
+                "SELECT id, poules_json, knockout_json FROM tournaments WHERE name = ? AND status = ?",
+                ("Open Tuesday", "planned"),
+            ).fetchall()
+            for row in rows:
+                poules = json.loads(row["poules_json"] or "{}")
+                knockout = json.loads(row["knockout_json"] or "[]")
+                all_matches = [m for group in poules.values() for m in group] + list(knockout)
+                if not all_matches:
+                    continue
+                has_scores = any(m.get("score_a") is not None or m.get("score_b") is not None for m in all_matches)
+                if has_scores:
+                    continue
+                conn.execute(
+                    "UPDATE tournaments SET poules_json = ?, knockout_json = ? WHERE id = ?",
+                    (json.dumps({}), json.dumps([]), row["id"]),
+                )
 
 
 def is_superadmin(username: str):
@@ -166,10 +172,14 @@ def get_tournament(tid: int):
     t["admins"] = [a["username"] for a in admins]
     t["players"] = [{"name": p["name"], "present": bool(p["present"])} for p in players]
     t["reserves"] = [r["name"] for r in reserves]
+    t["present_count"] = sum(1 for p in t["players"] if p["present"])
     return t
 
 
 def _hydrate_tournament(row):
+    poules = json.loads(row["poules_json"] or "{}")
+    knockout = json.loads(row["knockout_json"] or "[]")
+    match_count = sum(len(v) for v in poules.values()) + len(knockout)
     return {
         "id": row["id"],
         "name": row["name"],
@@ -177,8 +187,9 @@ def _hydrate_tournament(row):
         "status": row["status"],
         "max_participants": row["max_participants"],
         "boards": json.loads(row["boards_json"] or "[]"),
-        "poules": json.loads(row["poules_json"] or "{}"),
-        "knockout": json.loads(row["knockout_json"] or "[]"),
+        "poules": poules,
+        "knockout": knockout,
+        "match_count": match_count,
     }
 
 
@@ -188,6 +199,28 @@ def save_tournament_matches(tournament):
             "UPDATE tournaments SET poules_json = ?, knockout_json = ? WHERE id = ?",
             (json.dumps(tournament["poules"]), json.dumps(tournament["knockout"]), tournament["id"]),
         )
+
+
+def compute_special_standings(tournaments):
+    scoreboard = {}
+    for tournament in tournaments:
+        match_groups = list(tournament.get("poules", {}).values()) + [tournament.get("knockout", [])]
+        for matches in match_groups:
+            for match in matches:
+                specials = match.get("specials") or {}
+                for suffix, player_key in [("_a", "a"), ("_b", "b")]:
+                    player = match.get(player_key)
+                    if not player:
+                        continue
+                    scoreboard.setdefault(player, {"s180": 0, "finish100": 0, "d15": 0})
+                    scoreboard[player]["s180"] += int(specials.get(f"s180{suffix}", 0) or 0)
+                    finish_values = str(specials.get(f"finish100{suffix}", "")).strip()
+                    d15_values = str(specials.get(f"d15{suffix}", "")).strip()
+                    scoreboard[player]["finish100"] += len([x for x in finish_values.split(",") if x.strip()]) if finish_values else 0
+                    scoreboard[player]["d15"] += len([x for x in d15_values.split(",") if x.strip()]) if d15_values else 0
+    rows = [{"name": name, **stats} for name, stats in scoreboard.items()]
+    rows.sort(key=lambda r: (r["s180"] + r["finish100"] + r["d15"], r["s180"]), reverse=True)
+    return rows[:10]
 
 
 init_db()
@@ -210,6 +243,7 @@ def home(request: Request):
     all_tournaments = list_tournaments()
     today_tournaments = [t for t in all_tournaments if t["planned_date"] == today and t["status"] != "finished"]
     finished_tournaments = [t for t in all_tournaments if t["status"] == "finished"]
+    special_rows = compute_special_standings(all_tournaments)
     return templates.TemplateResponse(
         request=request,
         name="home.html",
@@ -217,6 +251,7 @@ def home(request: Request):
             "request": request,
             "today_tournaments": today_tournaments,
             "finished_tournaments": finished_tournaments,
+            "special_rows": special_rows,
         },
     )
 
@@ -338,6 +373,29 @@ def create_tournament(
     return RedirectResponse(f"/admin/tournament/{tid}", status_code=303)
 
 
+@app.post("/admin/tournament/{tid}/setup")
+def update_setup(
+    request: Request,
+    tid: int,
+    max_participants: int = Form(...),
+    board_count: int = Form(...),
+):
+    user = require_login(request)
+    t = get_tournament(tid)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=303)
+    if not t or user not in t.get("admins", []):
+        raise HTTPException(403, "No access")
+
+    boards = list(range(1, max(board_count, 1) + 1))
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tournaments SET max_participants = ?, boards_json = ? WHERE id = ?",
+            (max(max_participants, 1), json.dumps(boards), tid),
+        )
+    return RedirectResponse(f"/admin/tournament/{tid}#setup", status_code=303)
+
+
 @app.get("/admin/tournament/{tid}", response_class=HTMLResponse)
 def admin_tournament(request: Request, tid: int):
     user = require_login(request)
@@ -375,10 +433,21 @@ def add_player(request: Request, tid: int, player_name: str = Form(...)):
         return RedirectResponse("/admin/login", status_code=303)
     if not t or user not in t.get("admins", []):
         raise HTTPException(403, "No access")
+    name = player_name.strip()
+    if not name:
+        return RedirectResponse(f"/admin/tournament/{tid}#inschrijvingen", status_code=303)
+    if len(t["players"]) >= t["max_participants"]:
+        with get_conn() as conn:
+            row = conn.execute("SELECT COALESCE(MAX(arrival_order), 0) AS m FROM reserves WHERE tournament_id = ?", (tid,)).fetchone()
+            conn.execute(
+                "INSERT INTO reserves(tournament_id, name, arrival_order) VALUES (?, ?, ?)",
+                (tid, name, row["m"] + 1),
+            )
+        return RedirectResponse(f"/admin/tournament/{tid}#inschrijvingen", status_code=303)
     with get_conn() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO players(tournament_id, name, present) VALUES (?, ?, 0)",
-            (tid, player_name.strip()),
+            (tid, name),
         )
     return RedirectResponse(f"/admin/tournament/{tid}#inschrijvingen", status_code=303)
 
@@ -401,6 +470,19 @@ def toggle_player(request: Request, tid: int, player_name: str = Form(...)):
                 "UPDATE players SET present = ? WHERE tournament_id = ? AND name = ?",
                 (0 if row["present"] else 1, tid, player_name),
             )
+    updated = get_tournament(tid)
+    accepts_json = "application/json" in request.headers.get("accept", "")
+    if accepts_json:
+        current = next((p for p in updated["players"] if p["name"] == player_name), None)
+        return JSONResponse(
+            {
+                "ok": True,
+                "player_name": player_name,
+                "present": bool(current and current["present"]),
+                "present_count": updated["present_count"],
+                "total_players": len(updated["players"]),
+            }
+        )
     return RedirectResponse(f"/admin/tournament/{tid}#inschrijvingen", status_code=303)
 
 

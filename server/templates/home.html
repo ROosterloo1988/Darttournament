@@ -3,7 +3,10 @@
 <h1>Vandaag geplande toernooien</h1>
 <ul>
   {% for t in today_tournaments %}
-    <li><a href="/tournament/{{ t.id }}/scores">{{ t.name }}</a></li>
+    <li>
+      <a href="/tournament/{{ t.id }}/scores">{{ t.name }}</a>
+      — {{ t.match_count }} wedstrijden gepland
+    </li>
   {% else %}
     <li>Geen toernooien voor vandaag.</li>
   {% endfor %}
@@ -15,6 +18,15 @@
     <li><a href="/tournament/{{ t.id }}/scores">{{ t.name }}</a></li>
   {% else %}
     <li>Geen afgesloten toernooien.</li>
+  {% endfor %}
+</ul>
+
+<h2>Bijzondere scores (top 10)</h2>
+<ul>
+  {% for row in special_rows %}
+    <li>{{ row.name }} — 180: {{ row.s180 }}, 100+: {{ row.finish100 }}, ≤15: {{ row.d15 }}</li>
+  {% else %}
+    <li>Nog geen bijzondere scores geregistreerd.</li>
   {% endfor %}
 </ul>
 {% endblock %}
