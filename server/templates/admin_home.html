@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Admin dashboard ({{ user }})</h1>
+<a href="/admin/logout">Uitloggen</a>
+<ul>
+  {% for t in tournaments %}
+  <li><a href="/admin/tournament/{{ t.id }}">{{ t.name }}</a></li>
+  {% else %}
+  <li>Geen gekoppelde toernooien.</li>
+  {% endfor %}
+</ul>
+{% endblock %}
