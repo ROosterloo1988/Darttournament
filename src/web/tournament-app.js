@@ -23,11 +23,12 @@
   }
 
   function isSuperAdmin() {
-    return hasAdminSession() && hasSuperAdminRole();
+    return hasSuperAdminRole();
   }
 
   function isTournamentAdmin(tournamentId) {
-    return hasAdminSession() && (state.tournamentAdmins[tournamentId] || []).includes(state.currentUser);
+    const assigned = (state.tournamentAdmins[tournamentId] || []).includes(state.currentUser);
+    return assigned && (hasAdminSession() || hasSuperAdminRole());
   }
 
   function canManageTournament(tournamentId) {
@@ -110,7 +111,15 @@
     const t = getTournamentById(tid);
     const admins = state.tournamentAdmins[tid] || [];
 
-    el('player-list').innerHTML = t ? t.users.map((u) => `<li>${u}</li>`).join('') : '';
+    if (t) syncRegistrationsWithUsers(t);
+    el('player-list').innerHTML = t
+      ? t.users
+          .map(
+            (u) =>
+              `<li>${u} <button type="button" class="rename-player" data-name="${u}">Rename</button> <button type="button" class="remove-player" data-name="${u}">Remove</button></li>`
+          )
+          .join('')
+      : '';
     el('admin-list').innerHTML = admins.length
       ? admins.map((a) => `<li>${a}</li>`).join('')
       : "<li class='muted'>No admins yet for this tournament</li>";
@@ -131,6 +140,38 @@
     return row;
   }
 
+  function syncRegistrationsWithUsers(tournament) {
+    tournament.registrations = tournament.registrations || [];
+    const userSet = new Set((tournament.users || []).map((u) => u.toLowerCase()));
+    (tournament.users || []).forEach((user) => ensureRegistration(tournament, user, 'list'));
+    tournament.registrations = tournament.registrations.filter((r) => userSet.has(r.name.toLowerCase()));
+  }
+
+  function renameInMatch(match, oldName, newName) {
+    if (!match) return;
+    if (match.a === oldName) match.a = newName;
+    if (match.b === oldName) match.b = newName;
+    if (match.writer === oldName) match.writer = newName;
+  }
+
+  function renamePlayerAcrossTournament(tournament, oldName, newName) {
+    tournament.users = (tournament.users || []).map((u) => (u === oldName ? newName : u));
+    (tournament.registrations || []).forEach((r) => {
+      if (r.name === oldName) r.name = newName;
+    });
+    (tournament.reserves || []).forEach((r) => {
+      if (r.name === oldName) r.name = newName;
+    });
+    (tournament.matches || []).forEach((m) => renameInMatch(m, oldName, newName));
+    (tournament.ko?.winner || []).forEach((m) => renameInMatch(m, oldName, newName));
+    (tournament.ko?.loser || []).forEach((m) => renameInMatch(m, oldName, newName));
+    (tournament.scoreHistory || []).forEach((entry) => {
+      if (entry.a === oldName) entry.a = newName;
+      if (entry.b === oldName) entry.b = newName;
+      if (entry.by === oldName) entry.by = newName;
+    });
+  }
+
   function renderRegistrations(tournament) {
     if (!tournament) {
       el('registration-list').innerHTML = '';
@@ -149,7 +190,7 @@
 
     tournament.reserves = (tournament.reserves || []).sort((a, b) => a.arrivalNo - b.arrivalNo);
     const reserveRows = tournament.reserves
-      .map((r) => `<li>#${r.arrivalNo} - ${r.name}</li>`)
+      .map((r) => `<li>#${r.arrivalNo} - ${r.name} <button type="button" class="rename-reserve" data-name="${r.name}">Rename</button></li>`)
       .join('');
     el('reserve-list').innerHTML = `<h4>Reserve lijst (volgorde binnenkomst)</h4>${reserveRows ? `<ul>${reserveRows}</ul>` : "<p class='muted'>Geen reserves.</p>"}`;
   }
@@ -171,13 +212,17 @@
   }
 
   function renderAdminPortalLock() {
-    const locked = !hasAdminSession();
+    const locked = !(hasAdminSession() || hasSuperAdminRole());
     document.querySelectorAll('.admin-protected').forEach((card) => {
       card.classList.toggle('locked', locked);
     });
-    el('admin-session-msg').textContent = locked
-      ? 'Log eerst in om admin-acties uit te voeren. Knoppen blijven zichtbaar met meldingen.'
-      : `Ingelogd als ${state.currentUser}.`;
+    if (locked) {
+      el('admin-session-msg').textContent = 'Log eerst in om admin-acties uit te voeren. Knoppen blijven zichtbaar met meldingen.';
+      return;
+    }
+    el('admin-session-msg').textContent = hasAdminSession()
+      ? `Ingelogd als ${state.currentUser}.`
+      : `Super admin ${state.currentUser} heeft direct beheerrechten.`;
   }
 
   function renderLifecycle(tournament) {
@@ -212,7 +257,7 @@
         ? 'Tournament Admin'
         : 'Public';
 
-    const sessionState = hasAdminSession() ? 'logged in' : 'not logged in';
+    const sessionState = hasAdminSession() || hasSuperAdminRole() ? 'admin access active' : 'not logged in';
     el('role-status').textContent = `${state.currentUser} role: ${role} (${sessionState})`;
   }
 
@@ -701,6 +746,42 @@
       saveState();
     });
 
+    el('player-list').addEventListener('click', (event) => {
+      const renameBtn = event.target.closest('.rename-player');
+      const removeBtn = event.target.closest('.remove-player');
+      if (!renameBtn && !removeBtn) return;
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      if (!t || !canManageTournament(tid)) return;
+
+      if (renameBtn) {
+        const oldName = renameBtn.dataset.name;
+        const proposed = window.prompt(`Nieuwe naam voor ${oldName}:`, oldName);
+        const newName = Logic.normalizePlayers(proposed || '')[0];
+        if (!newName || newName.toLowerCase() === oldName.toLowerCase()) return;
+        if (t.users.some((u) => u.toLowerCase() === newName.toLowerCase())) {
+          alert('Deze spelernaam bestaat al.');
+          return;
+        }
+        renamePlayerAcrossTournament(t, oldName, newName);
+        pushEvent(t, `Player renamed: ${oldName} -> ${newName}`);
+      }
+
+      if (removeBtn) {
+        const targetName = removeBtn.dataset.name;
+        if (!window.confirm(`Speler ${targetName} verwijderen uit dit toernooi?`)) return;
+        t.users = (t.users || []).filter((u) => u !== targetName);
+        t.registrations = (t.registrations || []).filter((r) => r.name !== targetName);
+        pushEvent(t, `Player removed: ${targetName}`);
+      }
+
+      renderPlayersAndAdmins();
+      renderDashboard();
+      renderPouleOptions(t);
+      renderLifecycle(t);
+      saveState();
+    });
+
     el('add-pre-register').addEventListener('click', () => {
       const tid = el('admin-tournament').value;
       const t = getTournamentById(tid);
@@ -802,6 +883,29 @@
       row.present = !row.present;
       row.checkedInAt = row.present ? new Date().toISOString() : null;
       pushEvent(t, `Check-in ${row.present ? 'present' : 'absent'}: ${row.name}`);
+      renderPlayersAndAdmins();
+      renderPouleOptions(t);
+      saveState();
+    });
+
+    el('reserve-list').addEventListener('click', (event) => {
+      const renameBtn = event.target.closest('.rename-reserve');
+      if (!renameBtn) return;
+      const tid = el('admin-tournament').value;
+      const t = getTournamentById(tid);
+      if (!t || !canManageTournament(tid)) return;
+      const oldName = renameBtn.dataset.name;
+      const proposed = window.prompt(`Nieuwe naam voor reserve ${oldName}:`, oldName);
+      const newName = Logic.normalizePlayers(proposed || '')[0];
+      if (!newName || newName.toLowerCase() === oldName.toLowerCase()) return;
+      if (t.reserves.some((r) => r.name.toLowerCase() === newName.toLowerCase())) {
+        alert('Deze reservenaam bestaat al.');
+        return;
+      }
+      (t.reserves || []).forEach((r) => {
+        if (r.name === oldName) r.name = newName;
+      });
+      pushEvent(t, `Reserve renamed: ${oldName} -> ${newName}`);
       renderPlayersAndAdmins();
       saveState();
     });

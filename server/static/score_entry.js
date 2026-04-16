@@ -22,11 +22,6 @@ function makeAccordion(container, matches, phase){
     el.innerHTML = `
       <div class="accordion-head">${m.a} vs ${m.b} ${done ? '✅' : '⏳'}</div>
       <div class="accordion-body">
-        <div class="row"><strong>Legs</strong></div>
-        <div class="row">
-          <label>Legs A <input type="number" data-field="legs_a" value="${m.legs_a ?? ''}"></label>
-          <label>Legs B <input type="number" data-field="legs_b" value="${m.legs_b ?? ''}"></label>
-        </div>
         <div class="row"><strong>Score</strong></div>
         <div class="row">
           <label>${m.a} <input type="number" data-field="score_a" value="${m.score_a ?? ''}"></label>
@@ -75,8 +70,6 @@ async function saveAll(){
     if (!card) continue;
     const scoreA = Number(card.querySelector('input[data-field="score_a"]').value);
     const scoreB = Number(card.querySelector('input[data-field="score_b"]').value);
-    const legsA = Number(card.querySelector('input[data-field="legs_a"]').value);
-    const legsB = Number(card.querySelector('input[data-field="legs_b"]').value);
     const specials = {
       s180_a: Number(card.querySelector('input[data-field="s180_a"]').value || 0),
       s180_b: Number(card.querySelector('input[data-field="s180_b"]').value || 0),
@@ -92,8 +85,6 @@ async function saveAll(){
         match_id: matchId,
         score_a: scoreA,
         score_b: scoreB,
-        legs_a: legsA,
-        legs_b: legsB,
         specials
       })
     });
@@ -104,8 +95,6 @@ async function saveAll(){
     if (target){
       target.score_a = scoreA;
       target.score_b = scoreB;
-      target.legs_a = legsA;
-      target.legs_b = legsB;
       target.specials = specials;
     }
     dirty.delete(key);
